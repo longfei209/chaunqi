@@ -1,9 +1,9 @@
 /* ============================================================
- *  combat.js —— 三栏布局 + 冲锋攻击 + 血条数字
+ *  combat.js —— 三栏布局 + 贴脸冲锋攻击 + 血条数字
  *
  *  攻击节奏（手动）：
- *    1. 冲过去（300~350ms）
- *    2. 到达后快速突刺一下（80ms）  ← 打击感
+ *    1. 冲到目标边缘贴脸停下（350ms）
+ *    2. 贴脸突刺一下（90ms，向前推 8px + 放大 1.15）
  *    3. 命中瞬间（扣血 + 抖动 + 飘字）
  *    4. 飞回原位（300ms）
  * ============================================================ */
@@ -59,22 +59,33 @@ function _buffPlayerAnim(){
 }
 
 /* ============================================================
- *  冲锋动作：分两步 —— 移动到位 + 到达后突刺一下
+ *  冲锋动作：冲到目标跟前贴脸 → 突刺一下
  * ============================================================ */
 async function _chargeTo(attackerEl, targetEl, moveMs){
   if(!attackerEl || !targetEl) return;
+
   const a = attackerEl.getBoundingClientRect();
   const t = targetEl.getBoundingClientRect();
-  const dx = (t.left + t.width/2) - (a.left + a.width/2);
+  const aCx = a.left + a.width/2;
+  const tCx = t.left + t.width/2;
+  const centerDx = tCx - aCx;
+  const sign = centerDx >= 0 ? 1 : -1;
+
+  // 攻击方半宽 + 目标半宽 + 4px 间隙 = 停下时正好贴脸不重叠
+  const stopDist = (a.width/2 + t.width/2 + 4);
+  const realDx = centerDx - sign * stopDist;
+
   attackerEl.style.zIndex = 200;
-  // 第一步：移动到目标面前（保留一点距离，不完全重合）
-  attackerEl.style.transition = `transform ${moveMs}ms cubic-bezier(.45,0,.25,1)`;
-  attackerEl.style.transform = `translateX(${dx * 0.82}px)`;
+
+  // 第一步：冲到目标跟前（贴脸停下）
+  attackerEl.style.transition = `transform ${moveMs}ms cubic-bezier(.4,0,.25,1)`;
+  attackerEl.style.transform = `translateX(${realDx}px)`;
   await _sleep(moveMs);
-  // 第二步：快速突刺一下（打击感）
-  attackerEl.style.transition = `transform 80ms cubic-bezier(.2,0,.5,1)`;
-  attackerEl.style.transform = `translateX(${dx}px) scale(1.18)`;
-  await _sleep(80);
+
+  // 第二步：贴脸突刺一下（向前推 8px + 轻微放大）
+  attackerEl.style.transition = `transform 90ms cubic-bezier(.2,0,.5,1)`;
+  attackerEl.style.transform = `translateX(${realDx + sign * 8}px) scale(1.15)`;
+  await _sleep(90);
 }
 
 function _returnFromCharge(attackerEl, backMs){
@@ -521,8 +532,6 @@ const Combat = {
 
   /* ============================================================
    *  玩家行动 —— 冲锋 + 突刺 + 返回
-   *  手动：350ms 冲 + 80ms 突刺 + 300ms 回 = 730ms
-   *  自动：0ms
    * ============================================================ */
   async _doPlayerActionAnimated(action, atkMul, isAuto){
     const playerEl = $('pBox');
@@ -534,9 +543,9 @@ const Combat = {
     const targetEl = targetM ? document.getElementById('mon-' + targetM.mid) : null;
 
     if(!isAuto && playerEl && targetEl){
-      await _chargeTo(playerEl, targetEl, 350);   // 冲 + 突刺
-      this._doPlayerAction(action, atkMul);       // 命中瞬间
-      _returnFromCharge(playerEl, 300);           // 返回
+      await _chargeTo(playerEl, targetEl, 350);
+      this._doPlayerAction(action, atkMul);
+      _returnFromCharge(playerEl, 300);
       await _sleep(320);
     }else{
       this._doPlayerAction(action, atkMul);
@@ -623,7 +632,6 @@ const Combat = {
 
   /* ============================================================
    *  宠物行动 —— 冲锋 + 突刺 + 返回
-   *  手动：300ms 冲 + 80ms 突刺 + 250ms 回
    * ============================================================ */
   async _doPetActionAnimated(p, isAuto){
     const petEl = document.getElementById('pet-' + p.uid);
@@ -696,7 +704,6 @@ const Combat = {
 
   /* ============================================================
    *  怪物行动 —— 冲锋 + 突刺 + 返回
-   *  手动：300ms 冲 + 80ms 突刺 + 250ms 回
    * ============================================================ */
   async _doMonsterActionAnimated(m, defMul, isAuto){
     const card = document.getElementById('mon-' + m.mid);
