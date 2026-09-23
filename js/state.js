@@ -1,5 +1,6 @@
 /* ============================================================
  *  state.js  —— Game 状态 + 装备生成 + 存档
+ *  本轮调整：升级成长曲线降低
  * ============================================================ */
 
 const Game = {
@@ -120,6 +121,7 @@ function calcAttr(){
 function playerMaxHp(){ return Game.player.maxHp + calcAttr().addHp; }
 function playerMaxMp(){ return Game.player.maxMp; }
 
+/* ---- 升级：成长曲线下降 ---- */
 function addExp(v){
   const p = Game.player;
   const oldLv = p.lv;
@@ -128,7 +130,11 @@ function addExp(v){
   while(p.exp >= p.lv * 120){
     p.exp -= p.lv * 120;
     p.lv++;
-    p.baseAtk += 4; p.baseDef += 2; p.maxHp += 25; p.baseSpd += 1; p.maxMp += 8;
+    p.baseAtk += 3;   // 原 +4
+    p.baseDef += 1;   // 原 +2
+    p.maxHp  += 15;   // 原 +25
+    p.baseSpd += 1;
+    p.maxMp  += 8;
     leveled = true;
   }
   if(leveled){
@@ -247,6 +253,12 @@ const Save = {
       });
       if(Game.player.mp == null){ Game.player.mp = 50; Game.player.maxMp = 50; }
       if(Game.player.potionMp == null) Game.player.potionMp = 0;
+      // 兼容旧宠物（补齐新字段）
+      Game.pets.forEach(p=>{
+        if(p.hp == null) p.hp = petStatFor(p).hp;
+        if(p.downUntil == null) p.downUntil = 0;
+        if(p.skillCd == null) p.skillCd = {};
+      });
       Nav.home(); Render.top(); Render.home();
       toast("读档完成");
     }catch(e){ toast("读档失败"); }
@@ -273,14 +285,15 @@ const Save = {
           quality: oldPet.quality, lv: oldPet.lv, exp: oldPet.exp,
           baseAtk: oldPet.baseAtk, baseDef: oldPet.baseDef,
           baseHp: oldPet.baseHp, baseSpd: oldPet.baseSpd,
-          skills: skills, hp: oldPet.baseHp
+          skills: skills, hp: petStatFor({quality:oldPet.quality, lv:oldPet.lv, baseHp:oldPet.baseHp}).hp,
+          downUntil: 0, skillCd: {}
         };
         Game.pets = [newPet];
         Game.activePets = [newPet.uid];
       }
       Save.auto();
       Nav.home(); Render.top(); Render.home();
-      toast("v6 存档已迁移到 v8");
+      toast("v6 存档已迁移");
     }catch(e){ toast("存档迁移失败"); }
   },
   reset(){
