@@ -1,5 +1,11 @@
 /* ============================================================
- *  combat.js —— 三栏布局 + 正方形单位 + 冲锋到对面
+ *  combat.js —— 三栏布局 + 冲锋攻击 + 血条数字
+ *
+ *  攻击节奏（手动）：
+ *    1. 冲过去（300~350ms）
+ *    2. 到达后快速突刺一下（80ms）  ← 打击感
+ *    3. 命中瞬间（扣血 + 抖动 + 飘字）
+ *    4. 飞回原位（300ms）
  * ============================================================ */
 
 function _sleep(ms){
@@ -52,25 +58,33 @@ function _buffPlayerAnim(){
   setTimeout(()=>el.classList.remove('anim-buff-glow'), 800);
 }
 
-/* ---------- 冲锋动画：计算精确位移 ---------- */
-async function _chargeTo(attackerEl, targetEl, halfDuration){
+/* ============================================================
+ *  冲锋动作：分两步 —— 移动到位 + 到达后突刺一下
+ * ============================================================ */
+async function _chargeTo(attackerEl, targetEl, moveMs){
   if(!attackerEl || !targetEl) return;
   const a = attackerEl.getBoundingClientRect();
   const t = targetEl.getBoundingClientRect();
   const dx = (t.left + t.width/2) - (a.left + a.width/2);
-  attackerEl.style.transition = `transform ${halfDuration}ms cubic-bezier(.45,0,.2,1)`;
-  attackerEl.style.transform = `translateX(${dx}px) scale(1.12)`;
   attackerEl.style.zIndex = 200;
-  await _sleep(halfDuration);
+  // 第一步：移动到目标面前（保留一点距离，不完全重合）
+  attackerEl.style.transition = `transform ${moveMs}ms cubic-bezier(.45,0,.25,1)`;
+  attackerEl.style.transform = `translateX(${dx * 0.82}px)`;
+  await _sleep(moveMs);
+  // 第二步：快速突刺一下（打击感）
+  attackerEl.style.transition = `transform 80ms cubic-bezier(.2,0,.5,1)`;
+  attackerEl.style.transform = `translateX(${dx}px) scale(1.18)`;
+  await _sleep(80);
 }
-function _returnFromCharge(attackerEl, halfDuration){
+
+function _returnFromCharge(attackerEl, backMs){
   if(!attackerEl) return;
-  attackerEl.style.transition = `transform ${halfDuration}ms cubic-bezier(.45,0,.2,1)`;
+  attackerEl.style.transition = `transform ${backMs}ms cubic-bezier(.4,0,.2,1)`;
   attackerEl.style.transform = '';
   setTimeout(() => {
     attackerEl.style.transition = '';
     attackerEl.style.zIndex = '';
-  }, halfDuration + 50);
+  }, backMs + 50);
 }
 
 /* ---------- 技能 emoji / 光效 ---------- */
@@ -165,7 +179,6 @@ const Combat = {
     const hpP = clamp(Game.player.hp/mHp,0,1)*100;
     const mpP = clamp(Game.player.mp/mMp,0,1)*100;
 
-    // 左栏：玩家方块 + 宠物方块
     const activePetObjs = Game.activePets
       .map(u => Game.pets.find(p=>p.uid === u))
       .filter(Boolean);
@@ -178,7 +191,10 @@ const Combat = {
         petHtml += `<div class="unit-box pet-box-single" id="pet-${p.uid}">
           <div class="u-emoji">${p.avatar}</div>
           <div class="u-lv">Lv.${p.lv}</div>
-          <div class="u-bar hp pet-hp"><i style="width:${hpPct}%"></i></div>
+          <div class="u-bar hp pet-hp">
+            <i style="width:${hpPct}%"></i>
+            <span class="u-num">${Math.floor(p.hp)}</span>
+          </div>
         </div>`;
       }else{
         const left = Math.ceil((p.downUntil - Date.now())/1000);
@@ -194,13 +210,18 @@ const Combat = {
       <div class="unit-box p-box" id="pBox">
         <div class="u-emoji">🧙</div>
         <div class="u-lv">Lv.${Game.player.lv}</div>
-        <div class="u-bar hp"><i style="width:${hpP}%"></i></div>
-        <div class="u-bar mp"><i style="width:${mpP}%"></i></div>
+        <div class="u-bar hp">
+          <i style="width:${hpP}%"></i>
+          <span class="u-num">${Math.floor(Game.player.hp)}</span>
+        </div>
+        <div class="u-bar mp">
+          <i style="width:${mpP}%"></i>
+          <span class="u-num" style="font-size:7px;color:#bbb;">${Math.floor(Game.player.mp)}</span>
+        </div>
       </div>
       ${petHtml}
     `;
 
-    // 右栏：怪物方块纵向队列
     const grid = $('bGrid');
     grid.innerHTML = '';
     b.monsters.forEach((m, i)=>{
@@ -216,7 +237,10 @@ const Combat = {
       card.innerHTML = `
         <div class="u-emoji">${tag}</div>
         <div class="u-name">${shortName}</div>
-        <div class="u-bar hp"><i style="width:${hP}%"></i></div>
+        <div class="u-bar hp">
+          <i style="width:${hP}%"></i>
+          <span class="u-num">${Math.max(0,Math.floor(m.hp))}</span>
+        </div>
       `;
       card.onclick = ()=>this.clickMonster(i);
       grid.appendChild(card);
@@ -496,11 +520,12 @@ const Combat = {
   },
 
   /* ============================================================
-   *  玩家行动 —— 冲锋到目标方块，命中后飞回
+   *  玩家行动 —— 冲锋 + 突刺 + 返回
+   *  手动：350ms 冲 + 80ms 突刺 + 300ms 回 = 730ms
+   *  自动：0ms
    * ============================================================ */
   async _doPlayerActionAnimated(action, atkMul, isAuto){
     const playerEl = $('pBox');
-    // 找一个目标方块（群攻时用第一个活怪）
     let targetM = action.target;
     if(!targetM || targetM.dead){
       const alive = Game.battle.monsters.filter(m=>!m.dead);
@@ -509,10 +534,10 @@ const Combat = {
     const targetEl = targetM ? document.getElementById('mon-' + targetM.mid) : null;
 
     if(!isAuto && playerEl && targetEl){
-      await _chargeTo(playerEl, targetEl, 250);
-      this._doPlayerAction(action, atkMul);
-      _returnFromCharge(playerEl, 250);
-      await _sleep(250);
+      await _chargeTo(playerEl, targetEl, 350);   // 冲 + 突刺
+      this._doPlayerAction(action, atkMul);       // 命中瞬间
+      _returnFromCharge(playerEl, 300);           // 返回
+      await _sleep(320);
     }else{
       this._doPlayerAction(action, atkMul);
     }
@@ -597,20 +622,20 @@ const Combat = {
   },
 
   /* ============================================================
-   *  宠物行动 —— 冲锋到目标，命中后飞回
+   *  宠物行动 —— 冲锋 + 突刺 + 返回
+   *  手动：300ms 冲 + 80ms 突刺 + 250ms 回
    * ============================================================ */
   async _doPetActionAnimated(p, isAuto){
     const petEl = document.getElementById('pet-' + p.uid);
-    // 目标：优先打血最少的活怪
     const alive = Game.battle.monsters.filter(m=>!m.dead);
     const targetM = alive.sort((a,b)=>a.hp-b.hp)[0] || null;
     const targetEl = targetM ? document.getElementById('mon-' + targetM.mid) : null;
 
     if(!isAuto && petEl && targetEl){
-      await _chargeTo(petEl, targetEl, 200);
+      await _chargeTo(petEl, targetEl, 300);
       this._doPetAction(p);
-      _returnFromCharge(petEl, 200);
-      await _sleep(200);
+      _returnFromCharge(petEl, 250);
+      await _sleep(270);
     }else{
       this._doPetAction(p);
     }
@@ -670,12 +695,12 @@ const Combat = {
   },
 
   /* ============================================================
-   *  怪物行动 —— 冲锋到玩家或宠物，命中后飞回
+   *  怪物行动 —— 冲锋 + 突刺 + 返回
+   *  手动：300ms 冲 + 80ms 突刺 + 250ms 回
    * ============================================================ */
   async _doMonsterActionAnimated(m, defMul, isAuto){
     const card = document.getElementById('mon-' + m.mid);
 
-    // 提前决定目标（用同一逻辑选玩家还是宠物）
     const alivePets = getActivePetObjects();
     let targetEl = null;
     let targetIsPet = false;
@@ -689,10 +714,10 @@ const Combat = {
     }
 
     if(!isAuto && card && targetEl){
-      await _chargeTo(card, targetEl, 200);
+      await _chargeTo(card, targetEl, 300);
       this._doMonsterAction(m, defMul, { targetIsPet, targetPet });
-      _returnFromCharge(card, 200);
-      await _sleep(200);
+      _returnFromCharge(card, 250);
+      await _sleep(270);
     }else{
       this._doMonsterAction(m, defMul, { targetIsPet, targetPet });
     }
