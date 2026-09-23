@@ -1,10 +1,11 @@
 /* ============================================================
  *  config.js  —— 所有可调数值都在这里
- *  本轮新增：
- *   - 宝石配置（8 种 × 3 品质）
- *   - 宝石碎片配置
- *   - 特色词条池（含新属性）
- *   - 装备孔位常量
+ *
+ *  本轮改动：
+ *   - 装备表换为 35 件（7 槽 × 5 档），含 min 值
+ *   - 每件装备掉落按区域分档
+ *   - 技能蓝耗：烈火 15 / 半月 28 / 治愈 22 / 战神 35
+ *   - 攻击 max = min × 2.2，防御 max = min × 2.0
  * ============================================================ */
 
 /* 品质 */
@@ -16,56 +17,108 @@ const QUALITY = {
 };
 const DECOMP_MAT = { normal:1, good:2, fine:4, epic:8 };
 
-/* 装备槽位 */
+/* 槽位 */
 const SLOT_NAME = { weapon:"武器", helmet:"帽子", cloth:"衣服", shoe:"鞋子", belt:"腰带", ring:"戒指", neck:"项链" };
 const SLOT_ORDER = ['weapon','helmet','cloth','shoe','belt','ring','neck'];
 
-/* 装备基础（atk/def ×0.6） */
+/* ============================================================
+ *  装备基础表（35 件，7 槽 × 5 档）
+ *  每件只写 min 值；max 由代码按比例算：
+ *    atkMax = round(atkMin × 2.2)
+ *    defMax = round(defMin × 2.0)
+ *  spd / hp 固定
+ *  档位 tier：1~5（掉落池用）
+ * ============================================================ */
 const EQUIP_BASE = {
-  "木剑":     {slot:"weapon", atk:5,  def:0,  spd:0, hp:0, buy:200,  sell:80},
-  "铁剑":     {slot:"weapon", atk:10, def:1,  spd:0, hp:0, buy:600,  sell:240},
-  "屠龙":     {slot:"weapon", atk:23, def:5,  spd:0, hp:0, buy:4500, sell:1800},
-  "魔龙斩":   {slot:"weapon", atk:29, def:7,  spd:2, hp:0, buy:6000, sell:3000},
-  "布帽":     {slot:"helmet", atk:0,  def:2,  spd:1, hp:0, buy:120,  sell:48},
-  "战神头盔": {slot:"helmet", atk:4,  def:8,  spd:1, hp:20, buy:2200, sell:880},
-  "布衣":     {slot:"cloth",  atk:0,  def:4,  spd:0, hp:10, buy:180,  sell:72},
-  "战神铠甲": {slot:"cloth",  atk:5,  def:13, spd:0, hp:50, buy:3200, sell:1280},
-  "布鞋":     {slot:"shoe",   atk:0,  def:2,  spd:2, hp:0, buy:100,  sell:40},
-  "战神战靴": {slot:"shoe",   atk:2,  def:7,  spd:4, hp:10, buy:1800, sell:720},
-  "兽皮腰带": {slot:"belt",   atk:0,  def:2,  spd:1, hp:0, buy:110,  sell:44},
-  "战神腰带": {slot:"belt",   atk:3,  def:8,  spd:3, hp:20, buy:2000, sell:800},
-  "青铜戒指": {slot:"ring",   atk:2,  def:1,  spd:2, hp:0, buy:140,  sell:56},
-  "力量戒指": {slot:"ring",   atk:8,  def:5,  spd:3, hp:0, buy:2600, sell:1040},
-  "木项链":   {slot:"neck",   atk:2,  def:1,  spd:1, hp:0, buy:130,  sell:52},
-  "魔龙项链": {slot:"neck",   atk:11, def:8,  spd:4, hp:30, buy:4800, sell:2400}
-};
-const SHOP_LIST = ["木剑","铁剑","布帽","战神头盔","布衣","战神铠甲","布鞋","战神战靴","兽皮腰带","战神腰带","青铜戒指","力量戒指","木项链"];
+  /* 武器 */
+  "木剑":     {slot:"weapon", tier:1, atk:5,  def:0,  spd:0, hp:0, buy:200,  sell:80},
+  "铁剑":     {slot:"weapon", tier:2, atk:8,  def:1,  spd:0, hp:0, buy:600,  sell:240},
+  "精钢剑":   {slot:"weapon", tier:3, atk:14, def:3,  spd:0, hp:0, buy:1800, sell:700},
+  "屠龙":     {slot:"weapon", tier:4, atk:22, def:5,  spd:0, hp:0, buy:4500, sell:1800},
+  "魔龙斩":   {slot:"weapon", tier:5, atk:30, def:7,  spd:2, hp:0, buy:9000, sell:3600},
 
-/* 套装 */
+  /* 帽子 */
+  "布帽":     {slot:"helmet", tier:1, atk:0,  def:2,  spd:1, hp:0,  buy:120,  sell:48},
+  "皮帽":     {slot:"helmet", tier:2, atk:0,  def:4,  spd:1, hp:10, buy:400,  sell:160},
+  "铁盔":     {slot:"helmet", tier:3, atk:2,  def:7,  spd:1, hp:25, buy:1200, sell:480},
+  "战神头盔": {slot:"helmet", tier:4, atk:4,  def:11, spd:1, hp:45, buy:2800, sell:1100},
+  "龙鳞头盔": {slot:"helmet", tier:5, atk:6,  def:15, spd:1, hp:70, buy:6000, sell:2400},
+
+  /* 衣服 */
+  "布衣":     {slot:"cloth", tier:1, atk:0,  def:3,  spd:0, hp:10, buy:180,  sell:72},
+  "皮甲":     {slot:"cloth", tier:2, atk:0,  def:6,  spd:0, hp:20, buy:500,  sell:200},
+  "锁子甲":   {slot:"cloth", tier:3, atk:3,  def:10, spd:0, hp:40, buy:1600, sell:640},
+  "战神铠甲": {slot:"cloth", tier:4, atk:5,  def:15, spd:0, hp:70, buy:3500, sell:1400},
+  "龙鳞铠甲": {slot:"cloth", tier:5, atk:7,  def:21, spd:0, hp:110,buy:7500, sell:3000},
+
+  /* 鞋子 */
+  "草鞋":     {slot:"shoe", tier:1, atk:0,  def:1,  spd:1, hp:0,  buy:80,   sell:32},
+  "布鞋":     {slot:"shoe", tier:2, atk:0,  def:2,  spd:2, hp:0,  buy:200,  sell:80},
+  "皮靴":     {slot:"shoe", tier:3, atk:0,  def:4,  spd:3, hp:5,  buy:800,  sell:320},
+  "战神战靴": {slot:"shoe", tier:4, atk:2,  def:7,  spd:4, hp:10, buy:2000, sell:800},
+  "龙鳞战靴": {slot:"shoe", tier:5, atk:3,  def:10, spd:5, hp:20, buy:5000, sell:2000},
+
+  /* 腰带 */
+  "麻绳":     {slot:"belt", tier:1, atk:0,  def:1,  spd:0, hp:0,  buy:70,   sell:28},
+  "兽皮腰带": {slot:"belt", tier:2, atk:0,  def:2,  spd:1, hp:10, buy:200,  sell:80},
+  "铁腰带":   {slot:"belt", tier:3, atk:2,  def:5,  spd:1, hp:25, buy:900,  sell:360},
+  "战神腰带": {slot:"belt", tier:4, atk:3,  def:8,  spd:3, hp:45, buy:2200, sell:880},
+  "龙鳞腰带": {slot:"belt", tier:5, atk:5,  def:12, spd:3, hp:75, buy:5500, sell:2200},
+
+  /* 戒指 */
+  "木戒":     {slot:"ring", tier:1, atk:1,  def:0,  spd:1, hp:0,  buy:90,   sell:36},
+  "青铜戒指": {slot:"ring", tier:2, atk:3,  def:1,  spd:2, hp:0,  buy:300,  sell:120},
+  "银戒":     {slot:"ring", tier:3, atk:5,  def:3,  spd:2, hp:0,  buy:1100, sell:440},
+  "力量戒指": {slot:"ring", tier:4, atk:8,  def:5,  spd:3, hp:0,  buy:2600, sell:1040},
+  "龙鳞戒指": {slot:"ring", tier:5, atk:12, def:8,  spd:3, hp:20, buy:6000, sell:2400},
+
+  /* 项链 */
+  "草链":     {slot:"neck", tier:1, atk:1,  def:0,  spd:0, hp:0,  buy:80,   sell:32},
+  "木项链":   {slot:"neck", tier:2, atk:2,  def:1,  spd:1, hp:0,  buy:250,  sell:100},
+  "银链":     {slot:"neck", tier:3, atk:4,  def:3,  spd:1, hp:15, buy:1000, sell:400},
+  "魔龙项链": {slot:"neck", tier:4, atk:7,  def:5,  spd:4, hp:30, buy:3000, sell:1200},
+  "龙鳞项链": {slot:"neck", tier:5, atk:11, def:8,  spd:4, hp:50, buy:6500, sell:2600}
+};
+
+/* 按档位分组（掉落池用） */
+const EQUIP_BY_TIER = {
+  1: [],
+  2: [],
+  3: [],
+  4: [],
+  5: []
+};
+Object.keys(EQUIP_BASE).forEach(name=>{
+  const t = EQUIP_BASE[name].tier;
+  if(EQUIP_BY_TIER[t]) EQUIP_BY_TIER[t].push(name);
+});
+
+/* 商店出售的装备（只卖 1~2 档基础装备） */
+const SHOP_LIST = ["木剑","铁剑","布帽","皮帽","布衣","皮甲","草鞋","布鞋","麻绳","兽皮腰带","木戒","青铜戒指","草链","木项链"];
+
+/* 套装（保留，扩展后部分名字变了） */
 const SETS = {
   "战神": { name:"战神套", members:["战神头盔","战神铠甲","战神战靴","战神腰带"], bonus3:{atk:15,def:10}, bonus4:{atk:30,def:25,hp:80,spd:5} },
-  "魔龙": { name:"魔龙套", members:["魔龙斩","魔龙项链"], bonus2:{atk:20,def:15,spd:5} }
+  "魔龙": { name:"魔龙套", members:["魔龙斩","魔龙项链"], bonus2:{atk:20,def:15,spd:5} },
+  "龙鳞": { name:"龙鳞套", members:["龙鳞头盔","龙鳞铠甲","龙鳞战靴","龙鳞腰带","龙鳞戒指","龙鳞项链"], bonus3:{atk:30,def:20}, bonus6:{atk:60,def:45,hp:200,spd:8} }
 };
 
-/* 特色词条池（原 AFFIXES 扩展版）
- * 一件装备最多 1 条
- * 品质概率：优秀 5% / 精良 15% / 史诗 40%
- */
+/* 特色词条池 */
 const AFFIXES = [
-  {k:'atk',   name:'锋利', unit:'',   roll:()=>rnd(2,6),    desc:v=>`+${v}攻击`,   type:'num'},
-  {k:'def',   name:'坚固', unit:'',   roll:()=>rnd(1,4),    desc:v=>`+${v}防御`,   type:'num'},
-  {k:'spd',   name:'疾风', unit:'',   roll:()=>rnd(2,6),    desc:v=>`+${v}速度`,   type:'num'},
-  {k:'hp',    name:'坚韧', unit:'',   roll:()=>rnd(10,40),  desc:v=>`+${v}HP`,     type:'num'},
-  {k:'crit',  name:'精准', unit:'%',  roll:()=>rnd(3,10),   desc:v=>`+${v}%暴击`,  type:'pct'},
-  {k:'critd', name:'致命', unit:'%',  roll:()=>rnd(15,50),  desc:v=>`+${v}%暴伤`,  type:'pct'},
-  {k:'combo', name:'连击', unit:'%',  roll:()=>rnd(1,3),    desc:v=>`+${v}%连击`,  type:'pct'},
-  {k:'counter',name:'反击',unit:'%',  roll:()=>rnd(1,3),    desc:v=>`+${v}%反击`,  type:'pct'},
-  {k:'lsPct', name:'吸血', unit:'%',  roll:()=>rnd(1,3),    desc:v=>`+${v}%吸血`,  type:'pct'},
-  {k:'lsFlat',name:'嗜血', unit:'',   roll:()=>rnd(1,4),    desc:v=>`+${v}固吸血`, type:'num'}
+  {k:'atk',   name:'锋利', unit:'',   roll:()=>rnd(2,6),    desc:v=>`+${v}攻击`},
+  {k:'def',   name:'坚固', unit:'',   roll:()=>rnd(1,4),    desc:v=>`+${v}防御`},
+  {k:'spd',   name:'疾风', unit:'',   roll:()=>rnd(2,6),    desc:v=>`+${v}速度`},
+  {k:'hp',    name:'坚韧', unit:'',   roll:()=>rnd(10,40),  desc:v=>`+${v}HP`},
+  {k:'crit',  name:'精准', unit:'%',  roll:()=>rnd(3,10),   desc:v=>`+${v}%暴击`},
+  {k:'critd', name:'致命', unit:'%',  roll:()=>rnd(15,50),  desc:v=>`+${v}%暴伤`},
+  {k:'combo', name:'连击', unit:'%',  roll:()=>rnd(1,3),    desc:v=>`+${v}%连击`},
+  {k:'counter',name:'反击',unit:'%',  roll:()=>rnd(1,3),    desc:v=>`+${v}%反击`},
+  {k:'lsPct', name:'吸血', unit:'%',  roll:()=>rnd(1,3),    desc:v=>`+${v}%吸血`},
+  {k:'lsFlat',name:'嗜血', unit:'',   roll:()=>rnd(1,4),    desc:v=>`+${v}固吸血`}
 ];
 const AFFIX_CHANCE = { normal:0, good:0.05, fine:0.15, epic:0.40 };
 
-/* 主角技能 */
+/* 主角技能（蓝耗加大） */
 const SKILLS = {
   liehuo:   {name:'烈火剑法', cd:5, unlock:1, mp:15, desc:'单体 ×1.8'},
   banyue:   {name:'半月弯刀', cd:6, unlock:3, mp:28, desc:'全体 ×0.9'},
@@ -73,14 +126,12 @@ const SKILLS = {
   zhanshen: {name:'战神祝福', cd:8, unlock:8, mp:35, desc:'3回合攻防+30%'}
 };
 
-/* 宠物模板 */
+/* 宠物 */
 const PET_TEMPLATES = {
   wolf:  {name:'影狼',  avatar:'🐺', base:{atk:10,def:3,hp:50,spd:10}},
   bear:  {name:'山熊',  avatar:'🐻', base:{atk:5,def:10,hp:100,spd:5}},
   eagle: {name:'迅鹰',  avatar:'🦅', base:{atk:8,def:4,hp:45,spd:18}}
 };
-
-/* 宠物技能池 */
 const PET_SKILLS = {
   crit:  {name:'锐爪', desc:'暴击+12%',           apply:st=>{st.crit += 0.12;}},
   ls:    {name:'嗜血', desc:'吸血12%',            apply:st=>{st.ls += 0.12;}},
@@ -103,7 +154,6 @@ const ELITE_AFFIXES = [
   {k:'pois',  name:'剧毒', apply:m=>{m.pois = Math.floor(m.atk*0.3);}}
 ];
 
-/* 怪物行为 */
 const MON_BEHAVIOR = {
   normal:{name:'普通'}, ranged:{name:'远程'}, tank:{name:'坦克'},
   healer:{name:'治疗'}, rage:{name:'狂暴'}, summon:{name:'召唤'}
@@ -112,18 +162,12 @@ const MON_BEHAVIOR = {
 /* ============================================================
  *  宝石系统
  * ============================================================ */
-
-/* 3 档品质 */
 const GEM_QUALITY = {
   normal:{ k:'normal', name:'普通', cls:'q-normal', color:'#aaa' },
   rare:  { k:'rare',   name:'稀有', cls:'q-fine',   color:'#89d' },
   legend:{ k:'legend', name:'传说', cls:'q-epic',   color:'#ffd700' }
 };
 
-/* 宝石配置：8 种
- * val: 三档数值 [普通, 稀有, 传说]
- * type: num（数值型）| pct（百分比型）
- */
 const GEMS = {
   red:    { k:'red',    name:'红宝石', color:'#c85a5a', icon:'🔴', stat:'atk',    val:[3,6,12],   type:'num', desc:'攻击' },
   blue:   { k:'blue',   name:'蓝宝石', color:'#5a7ac8', icon:'🔵', stat:'def',    val:[2,5,10],   type:'num', desc:'防御' },
@@ -134,42 +178,22 @@ const GEMS = {
   yellow: { k:'yellow', name:'黄宝石', color:'#d8d84a', icon:'🟡', stat:'lsFlat', val:[2,5,10],   type:'num', desc:'固定吸血' },
   white:  { k:'white',  name:'白宝石', color:'#e8e8e8', icon:'⚪', stat:'crit',   val:[1,2,4],    type:'pct', desc:'暴击率' }
 };
-
-/* 宝石 id 生成规则：`${gemKey}_${quality}` 例如 'red_normal' */
 const GEM_QUALITY_ORDER = ['normal','rare','legend'];
-const GEM_QUALITY_NAME = ['normal','rare','legend'];
-
-/* 商店卖普通宝石价格 */
 const GEM_SHOP_PRICE = 200;
-
-/* 取下费用 */
 const GEM_REMOVE_COST = { normal:200, rare:500, legend:1000 };
-
-/* 碎片合成：3 碎片 = 1 普通宝石（10% 出稀有） */
 const FRAG_PER_GEM = 3;
 const FRAG_UPGRADE_RARE = 0.10;
-/* 分级合成：3 普通碎片 = 1 稀有碎片；3 稀有碎片 = 1 传说碎片 */
 const FRAG_TIER_UP = 3;
-/* 碎片堆叠上限 */
 const FRAG_MAX_STACK = 999;
-
-/* 掉落概率 */
-const GEM_DROP_RATE = {
-  normalMon: 0.05,   // 普通怪 5%
-  elite: 0.10,       // 精英 10%
-  boss: 0.20         // BOSS 20%
-};
-/* 掉落时：50% 宝石 / 50% 碎片 */
+const GEM_DROP_RATE = { normalMon: 0.05, elite: 0.10, boss: 0.20 };
 const GEM_DROP_SPLIT = 0.50;
-
-/* 装备孔位数 */
 const EQUIP_SOCKETS = 3;
 
 /* ============================================================
- *  区域配置（所有怪物 HP/ATK/DEF ×1.3 后的最终版）
+ *  区域配置（每个区域记录掉落档位）
  * ============================================================ */
 const AREAS = [
-  { id:"grass", name:"新手草原", unlock:true, floors:[
+  { id:"grass", name:"新手草原", unlock:true, dropTier:{ normal:1, elite:[1,2], boss:2 }, floors:[
       { pool:[
           {id:"wolf",name:"野狼",hp:130,atk:16,def:5,spd:9,exp:55,gMin:15,gMax:50,behavior:'normal'},
           {id:"rabbit",name:"野兔",hp:91,atk:12,def:3,spd:14,exp:40,gMin:10,gMax:35,behavior:'ranged'},
@@ -188,7 +212,7 @@ const AREAS = [
           {id:"priest",name:"祭司",hp:338,atk:26,def:13,spd:8,exp:190,gMin:60,gMax:140,behavior:'healer'}],
         boss:{id:"beastKing",name:"兽王",hp:1300,atk:55,def:26,spd:13,exp:600,gMin:250,gMax:450} }
   ]},
-  { id:"orc", name:"兽人古墓", unlock:true, floors:[
+  { id:"orc", name:"兽人古墓", unlock:true, dropTier:{ normal:2, elite:[2,3], boss:3 }, floors:[
       { pool:[
           {id:"orcSlave",name:"兽人奴隶",hp:416,atk:36,def:16,spd:8,exp:180,gMin:60,gMax:140,behavior:'normal'},
           {id:"orcArcher",name:"兽人弓手",hp:338,atk:39,def:10,spd:13,exp:170,gMin:55,gMax:130,behavior:'ranged'},
@@ -207,7 +231,7 @@ const AREAS = [
           {id:"orcSummoner",name:"兽人召唤师",hp:546,atk:60,def:16,spd:12,exp:380,gMin:135,gMax:270,behavior:'summon'}],
         boss:{id:"orcKing",name:"兽人之王",hp:2080,atk:73,def:36,spd:12,exp:800,gMin:320,gMax:550} }
   ]},
-  { id:"pig", name:"猪洞", unlock:true, floors:[
+  { id:"pig", name:"猪洞", unlock:true, dropTier:{ normal:3, elite:[3,4], boss:4 }, floors:[
       { pool:[
           {id:"pigSoldier",name:"黑猪",hp:715,atk:52,def:23,spd:9,exp:320,gMin:110,gMax:240,behavior:'normal'},
           {id:"pigArcher",name:"猪弓手",hp:546,atk:57,def:16,spd:13,exp:300,gMin:100,gMax:220,behavior:'ranged'},
@@ -226,7 +250,7 @@ const AREAS = [
           {id:"pigSummon2",name:"猪魔召",hp:884,atk:78,def:29,spd:12,exp:600,gMin:215,gMax:430,behavior:'summon'}],
         boss:{id:"zhuDemon",name:"猪魔教主",hp:2860,atk:88,def:49,spd:13,exp:1200,gMin:480,gMax:820} }
   ]},
-  { id:"zuma", name:"祖玛神殿", unlock:true, floors:[
+  { id:"zuma", name:"祖玛神殿", unlock:true, dropTier:{ normal:3, elite:[3,4], boss:4 }, floors:[
       { pool:[
           {id:"zumaGuard",name:"祖玛卫士",hp:1014,atk:70,def:36,spd:10,exp:520,gMin:200,gMax:380,behavior:'normal'},
           {id:"zumaArcher",name:"祖玛弓手",hp:806,atk:78,def:26,spd:14,exp:500,gMin:190,gMax:360,behavior:'ranged'},
@@ -245,7 +269,7 @@ const AREAS = [
           {id:"zumaSummon2",name:"祖玛唤灵者",hp:1235,atk:99,def:39,spd:13,exp:790,gMin:305,gMax:570,behavior:'summon'}],
         boss:{id:"zumaDemon",name:"祖玛教主",hp:3640,atk:112,def:62,spd:14,exp:1600,gMin:620,gMax:1050,unlockDragon:true} }
   ]},
-  { id:"redMoon", name:"赤月巢穴", unlock:true, floors:[
+  { id:"redMoon", name:"赤月巢穴", unlock:true, dropTier:{ normal:4, elite:[4,5], boss:5 }, floors:[
       { pool:[
           {id:"spider1",name:"月魔蜘蛛",hp:1235,atk:91,def:44,spd:12,exp:720,gMin:300,gMax:520,behavior:'rage'},
           {id:"spiderRanged",name:"毒蜘蛛",hp:1014,atk:99,def:34,spd:15,exp:700,gMin:290,gMax:500,behavior:'ranged'},
@@ -264,7 +288,7 @@ const AREAS = [
           {id:"spiderCaller",name:"赤月召唤者",hp:1365,atk:114,def:47,spd:15,exp:980,gMin:395,gMax:670,behavior:'summon'}],
         boss:{id:"redMoonBoss",name:"赤月恶魔",hp:4680,atk:135,def:75,spd:15,exp:2000,gMin:800,gMax:1300,unlockDragon:true} }
   ]},
-  { id:"dragonCity", name:"魔龙城", unlock:false, floors:[
+  { id:"dragonCity", name:"魔龙城", unlock:false, dropTier:{ normal:5, elite:[5], boss:5 }, floors:[
       { pool:[
           {id:"dragonSoldier",name:"魔龙刀兵",hp:1430,atk:68,def:29,spd:12,exp:1300,gMin:800,gMax:1300,behavior:'normal'},
           {id:"dragonArcher",name:"魔龙弓手",hp:1235,atk:73,def:26,spd:16,exp:1250,gMin:780,gMax:1250,behavior:'ranged'},
@@ -294,8 +318,12 @@ const POTION_PRICE = 50;
 const POTION_MP_PRICE = 40;
 const AUTO_POTION_THRESHOLD = 0.30;
 const RAGE_MAX = 10;
-const GROUPS_PER_FLOOR = 4;   // 保留兼容，不再使用
 const ELITE_CHANCE = 0.15;
 const PAGE_SIZE = { shop:5, bag:6, quest:4, gems:20 };
 const PET_WAREHOUSE_MAX = 10;
 const PET_DOWN_MS = 30*1000;
+
+/* 每回合固定回蓝 */
+const MP_REGEN_PER_TURN = 2;
+/* 击杀回蓝 */
+const MP_REGEN_PER_KILL = 5;

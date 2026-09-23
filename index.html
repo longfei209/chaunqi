@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
-<title>传奇 · 黑白 · v9</title>
+<title>传奇 · 黑白 · v10</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -14,22 +14,16 @@
   <div class="page" id="page-home">
     <div class="hud">
       <div class="hud-row">
-        <span>Lv.<b id="tLv">1</b> · 金 <b id="tGold">0</b></span>
-        <span class="dim">红<b id="tPotion">0</b> 蓝<b id="tPotionMp">0</b> 材<b id="tMat">0</b> 怒<b id="tRage">0</b>/10</span>
+        <span>Lv.<b id="tLv">1</b></span>
       </div>
       <div class="hud-row bars">
         <div class="bar"><i id="tHpBar"></i><div class="txt" id="tHpTxt">0/0</div></div>
+      </div>
+      <div class="hud-row bars">
         <div class="bar mp"><i id="tMpBar"></i><div class="txt" id="tMpTxt">0/0</div></div>
+      </div>
+      <div class="hud-row bars">
         <div class="bar exp"><i id="tExpBar"></i><div class="txt" id="tExpTxt">0/0</div></div>
-      </div>
-      <div class="hud-row stats">
-        <span>攻 <b id="tAtk">0</b></span>
-        <span>防 <b id="tDef">0</b></span>
-        <span>速 <b id="tSpd">0</b></span>
-        <span id="tPet" class="pet-mini dim">宠:0/1</span>
-      </div>
-      <div class="hud-row" style="justify-content:flex-start;">
-        <span class="dim" id="tExt" style="font-size:11px;">连0% 反0% 吸0% 固0 暴0%</span>
       </div>
     </div>
     <div class="home-body">
@@ -179,6 +173,11 @@
     </div>
   </div>
 
+</div>
+
+<!-- 装备详情弹窗 -->
+<div id="equipModal" class="modal hidden">
+  <div class="modal-box" id="equipModalBody"></div>
 </div>
 
 <div id="toast"></div>

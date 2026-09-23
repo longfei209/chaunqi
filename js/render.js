@@ -2,8 +2,11 @@
  *  render.js  —— 导航 + 各页面渲染
  *
  *  本轮改动：
- *   - 商店分两个 tab：道具 | 宝石
- *   - 镶嵌入口只在宝石 tab
+ *   - 主页顶栏精简（只留 Lv + HP/MP/EXP）
+ *   - 背包页顶部显示 金币/红/蓝/材
+ *   - 人物页显示全部属性（攻击区间）
+ *   - 装备卡片可点击弹窗查看详情
+ *   - 商店 tab：道具 | 宝石
  * ============================================================ */
 
 const Nav = {
@@ -47,18 +50,11 @@ const Nav = {
 };
 
 const Render = {
+  /* ---------- 主页顶栏（只留 Lv + HP/MP/EXP） ---------- */
   top(){
-    const p = Game.player, a = calcAttr();
+    const p = Game.player;
     const mHp = playerMaxHp(), mMp = playerMaxMp();
     $('tLv').textContent = p.lv;
-    $('tGold').textContent = fmt(p.gold);
-    $('tPotion').textContent = p.potion;
-    $('tPotionMp').textContent = p.potionMp;
-    $('tMat').textContent = Game.mat;
-    $('tRage').textContent = p.rage || 0;
-    $('tAtk').textContent = a.atk;
-    $('tDef').textContent = a.def;
-    $('tSpd').textContent = a.spd;
     $('tHpBar').style.width = clamp(p.hp/mHp,0,1)*100 + '%';
     $('tHpTxt').textContent = Math.floor(p.hp) + '/' + mHp;
     $('tMpBar').style.width = clamp(p.mp/mMp,0,1)*100 + '%';
@@ -66,15 +62,9 @@ const Render = {
     const need = p.lv * 120;
     $('tExpBar').style.width = clamp(p.exp/need,0,1)*100 + '%';
     $('tExpTxt').textContent = p.exp + '/' + need;
-    $('tPet').textContent = `宠:${Game.activePets.length}/${petSlotLimit()}`;
-    const ext = $('tExt');
-    if(ext){
-      ext.textContent =
-        `连${(a.combo*100).toFixed(0)}% 反${(a.counter*100).toFixed(0)}% ` +
-        `吸${(a.lsPct*100).toFixed(0)}% 固${a.lsFlat} 暴${(a.crit*100).toFixed(0)}%`;
-    }
   },
 
+  /* ---------- 主页 ---------- */
   home(){
     const box = $('homeMain');
     if(Game.ui.areaId == null || Game.ui.floorIdx == null){
@@ -173,36 +163,32 @@ const Render = {
     Events.maybeTrigger();
   },
 
+  /* ---------- 人物（完整属性 + 装备卡片 + 弹窗） ---------- */
   wornPage(){
     const a = calcAttr();
     let html = `<div class="card">
-      <div class="card-title">Lv.${Game.player.lv}</div>
-      <div class="card-meta">攻${a.atk} 防${a.def} 速${a.spd} | 暴击${(a.crit*100).toFixed(1)}% 暴伤${(a.critD*100).toFixed(0)}%</div>
-      <div class="card-meta">连击${(a.combo*100).toFixed(1)}% 反击${(a.counter*100).toFixed(1)}% 吸血${(a.lsPct*100).toFixed(1)}% 固吸${a.lsFlat}</div>
+      <div class="card-title">人物 · Lv.${Game.player.lv}</div>
       <div class="card-meta">HP ${Math.floor(Game.player.hp)}/${playerMaxHp()} · MP ${Math.floor(Game.player.mp)}/${playerMaxMp()}</div>
+      <div class="card-meta">攻击 ${a.atkMin}-${a.atkMax}</div>
+      <div class="card-meta">防御 ${a.defMin}-${a.defMax}</div>
+      <div class="card-meta">速度 ${a.spd}</div>
+      <div class="card-meta">生命 +${a.addHp}</div>
+      <div class="card-meta">暴击率 ${(a.crit*100).toFixed(1)}% · 暴伤 ${(a.critD*100).toFixed(0)}%</div>
+      <div class="card-meta">连击 ${(a.combo*100).toFixed(1)}% · 反击 ${(a.counter*100).toFixed(1)}%</div>
+      <div class="card-meta">吸血 ${(a.lsPct*100).toFixed(1)}% · 固吸 ${a.lsFlat}</div>
       <div class="card-actions"><button class="btn" onclick="Equip.autoBest()">一键最强</button></div>
     </div>`;
     SLOT_ORDER.forEach(s=>{
       const e = Game.worn[s];
       if(e){
-        const t = equipStat(e), q = QUALITY[e.quality];
-        const gemB = equipGemBonus(e);
-        const afx = equipAffixDesc(e);
-        const socketsTxt = (e.sockets||[]).map(g=>{
-          if(!g) return '○';
-          return GEMS[g.key] ? GEMS[g.key].icon : '?';
-        }).join(' ');
-        html += `<div class="card">
+        const r = equipFullRange(e);
+        const q = QUALITY[e.quality];
+        html += `<div class="card clickable" onclick="Render.showEquipDetail('worn','${s}')">
           <div class="card-title ${q.cls}">${e.name} <span class="dim">[${q.name}] ${SLOT_NAME[s]}</span></div>
-          <div class="card-meta">基础 攻${e.baseAtk} 防${e.baseDef} | 装备 ${t.atk}/${t.def} ${t.spd} HP+${t.hp}</div>
-          ${(gemB.atk+gemB.def+gemB.spd+gemB.hp+gemB.combo+gemB.counter+gemB.lsPct+gemB.lsFlat+gemB.crit) > 0
-            ? `<div class="card-meta" style="color:#9d9;">宝石：攻+${gemB.atk} 防+${gemB.def} 速+${gemB.spd} HP+${gemB.hp} 连${gemB.combo}% 反${gemB.counter}% 吸${gemB.lsPct}% 固${gemB.lsFlat} 暴${gemB.crit}%</div>`
-            : ''}
-          ${afx?`<div class="card-meta" style="color:#d8a;">词条：${afx}</div>`:''}
-          <div class="card-meta">孔位：${socketsTxt}</div>
+          <div class="card-meta">攻 ${r.atkMin}-${r.atkMax} 防 ${r.defMin}-${r.defMax} 速 ${r.spd} HP ${r.hp>0?'+'+r.hp:0}</div>
           <div class="card-actions">
-            <button class="btn" onclick="Nav.go('socket',{type:'worn',slot:'${s}'})">镶嵌</button>
-            <button class="btn" onclick="Equip.unwear('${s}')">卸下</button>
+            <button class="btn" onclick="event.stopPropagation();Nav.go('socket',{type:'worn',slot:'${s}'})">镶嵌</button>
+            <button class="btn" onclick="event.stopPropagation();Equip.unwear('${s}')">卸下</button>
           </div>
         </div>`;
       }else{
@@ -212,12 +198,19 @@ const Render = {
     $('wornBody').innerHTML = html;
   },
 
+  /* ---------- 背包 ---------- */
   bagPage(opts){
     opts = opts || {};
     const tab = opts.tab || 'equip';
     const page = opts.page || 1;
 
-    let html = `<div style="display:flex;gap:6px;margin-bottom:6px;">
+    // 顶部信息
+    let html = `<div class="dim" style="font-size:11px;padding:0 0 6px;">
+      金 ${fmt(Game.player.gold)} · 红 ${Game.player.potion} · 蓝 ${Game.player.potionMp} · 材 ${Game.mat}
+    </div>`;
+
+    // tab
+    html += `<div style="display:flex;gap:6px;margin-bottom:6px;">
       <button class="btn ${tab==='equip'?'primary':''}" onclick="Nav._show('bag',{tab:'equip',page:1})">装备</button>
       <button class="btn ${tab==='gem'?'primary':''}" onclick="Nav._show('bag',{tab:'gem',page:1})">宝石</button>
     </div>`;
@@ -244,9 +237,8 @@ const Render = {
       slice.forEach((e, i)=>{
         const idx = start + i;
         const q = QUALITY[e.quality];
-        const t = equipStat(e);
+        const r = equipFullRange(e);
         const cmp = Equip.compareToWorn(e);
-        const afx = equipAffixDesc(e);
 
         const cmpLine = (label, nVal, oVal, isPct) => {
           if(nVal === 0 && oVal === 0) return '';
@@ -265,20 +257,16 @@ const Render = {
           cmpLine('暴', cmp.crit.n, cmp.crit.o, true)
         ].filter(x=>x).join('');
 
-        const socketsTxt = (e.sockets||[]).map(g=>g?GEMS[g.key].icon:'○').join(' ');
-
-        html += `<div class="card">
+        html += `<div class="card clickable" onclick="Render.showEquipDetail('bag',${idx})">
           <div class="card-title ${q.cls}">${e.name} <span class="dim">[${q.name}]</span></div>
-          <div class="card-meta">基础 攻${e.baseAtk} 防${e.baseDef} 速${e.baseSpd||0} HP${e.baseHp||0}</div>
+          <div class="card-meta">攻 ${r.atkMin}-${r.atkMax} 防 ${r.defMin}-${r.defMax} 速 ${r.spd} HP ${r.hp>0?'+'+r.hp:0}</div>
           <div class="card-meta" style="font-size:11px;">${cmpHtml || '<span class="dim">无对比</span>'}</div>
-          ${afx?`<div class="card-meta" style="color:#d8a;">词条：${afx}</div>`:''}
-          <div class="card-meta">孔位：${socketsTxt} · 洗练${e.refineTimes}/3</div>
           <div class="card-actions">
-            <button class="btn" onclick="Equip.wear(${idx})">穿戴</button>
-            <button class="btn" onclick="Nav.go('socket',{type:'bag',idx:${idx}})">镶嵌</button>
-            <button class="btn" onclick="Nav.go('refine',{idx:${idx}})">洗练</button>
-            <button class="btn" onclick="Equip.sell(${idx})">出售</button>
-            <button class="btn" onclick="Equip.decompose(${idx})">分解</button>
+            <button class="btn" onclick="event.stopPropagation();Equip.wear(${idx})">穿戴</button>
+            <button class="btn" onclick="event.stopPropagation();Nav.go('socket',{type:'bag',idx:${idx}})">镶嵌</button>
+            <button class="btn" onclick="event.stopPropagation();Nav.go('refine',{idx:${idx}})">洗练</button>
+            <button class="btn" onclick="event.stopPropagation();Equip.sell(${idx})">出售</button>
+            <button class="btn" onclick="event.stopPropagation();Equip.decompose(${idx})">分解</button>
           </div>
         </div>`;
       });
@@ -379,6 +367,65 @@ const Render = {
     Nav._show('bag',{tab:'gem',page:1});
   },
 
+  /* ============================================================
+   *  装备详情弹窗
+   * ============================================================ */
+  showEquipDetail(refType, refId){
+    let eq = null;
+    if(refType === 'worn') eq = Game.worn[refId];
+    else if(refType === 'bag') eq = Game.bag[refId];
+    if(!eq) return;
+
+    const q = QUALITY[eq.quality];
+    const r = equipFullRange(eq);
+    const base = equipBaseRange(eq);
+    const gemB = equipGemBonus(eq);
+    const afx = equipAffixDesc(eq);
+    const socketsTxt = (eq.sockets||[]).map(g=>g?GEMS[g.key].icon:'○').join(' ');
+
+    // 操作按钮
+    let actions = '';
+    if(refType === 'bag'){
+      actions = `
+        <button class="btn" onclick="Equip.wear(${refId});Render.closeEquipDetail()">穿戴</button>
+        <button class="btn" onclick="Render.closeEquipDetail();Nav.go('socket',{type:'bag',idx:${refId}})">镶嵌</button>
+        <button class="btn" onclick="Render.closeEquipDetail();Nav.go('refine',{idx:${refId}})">洗练</button>
+        <button class="btn" onclick="Equip.sell(${refId});Render.closeEquipDetail()">出售</button>
+        <button class="btn" onclick="Equip.decompose(${refId});Render.closeEquipDetail()">分解</button>
+      `;
+    }else{
+      actions = `
+        <button class="btn" onclick="Render.closeEquipDetail();Nav.go('socket',{type:'worn',slot:'${refId}'})">镶嵌</button>
+        <button class="btn" onclick="Equip.unwear('${refId}');Render.closeEquipDetail()">卸下</button>
+      `;
+    }
+
+    const html = `
+      <div class="modal-title">
+        <span class="${q.cls}">${eq.name} <span class="dim">[${q.name}]</span></span>
+        <button class="modal-close" onclick="Render.closeEquipDetail()">✕</button>
+      </div>
+      <div class="modal-row"><span class="lbl">槽位</span><span>${SLOT_NAME[eq.slot]}</span></div>
+      <div class="modal-row"><span class="lbl">攻击</span><span>${r.atkMin}-${r.atkMax}</span></div>
+      <div class="modal-row"><span class="lbl">防御</span><span>${r.defMin}-${r.defMax}</span></div>
+      <div class="modal-row"><span class="lbl">速度</span><span>${r.spd}</span></div>
+      <div class="modal-row"><span class="lbl">生命</span><span>${r.hp>0?'+'+r.hp:0}</span></div>
+      ${(gemB.atk+gemB.def+gemB.hp+gemB.spd+gemB.combo+gemB.counter+gemB.lsPct+gemB.lsFlat+gemB.crit) > 0
+        ? `<div class="modal-row"><span class="lbl">宝石加成</span><span>攻+${gemB.atk} 防+${gemB.def} 速+${gemB.spd} HP+${gemB.hp} 连${gemB.combo}% 反${gemB.counter}% 吸${gemB.lsPct}% 固${gemB.lsFlat} 暴${gemB.crit}%</span></div>`
+        : ''}
+      <div class="modal-row"><span class="lbl">词条</span><span>${afx || '无'}</span></div>
+      <div class="modal-row"><span class="lbl">孔位</span><span>${socketsTxt}</span></div>
+      <div class="modal-row"><span class="lbl">洗练</span><span>${eq.refineTimes}/3</span></div>
+      <div class="modal-actions">${actions}</div>
+    `;
+    $('equipModalBody').innerHTML = html;
+    $('equipModal').classList.remove('hidden');
+  },
+  closeEquipDetail(){
+    $('equipModal').classList.add('hidden');
+  },
+
+  /* ---------- 镶嵌页 ---------- */
   socketPage(opts){
     opts = opts || {};
     const eq = Equip.findEquipByRef(opts);
@@ -448,7 +495,6 @@ const Render = {
     this._socketSelected = i;
     Render.socketPage(Nav._lastOpts);
   },
-
   _pickGem(gemId){
     const eq = Equip.findEquipByRef(Nav._lastOpts);
     if(!eq) return toast("装备丢失");
@@ -457,7 +503,6 @@ const Render = {
     this._socketSelected = -1;
     Render.socketPage(Nav._lastOpts);
   },
-
   _removeGem(socketIdx){
     const eq = Equip.findEquipByRef(Nav._lastOpts);
     if(!eq) return;
@@ -465,16 +510,17 @@ const Render = {
     Render.socketPage(Nav._lastOpts);
   },
 
+  /* ---------- 洗练 ---------- */
   refinePage(idx){
     if(idx == null || !Game.bag[idx]) { Nav.back(); return; }
     const e = Game.bag[idx];
-    const t = equipStat(e), q = QUALITY[e.quality];
+    const r = equipFullRange(e), q = QUALITY[e.quality];
     const risk = Equip.refineRisk(e);
     const afx = equipAffixDesc(e);
     let html = `<div class="card">
       <div class="card-title ${q.cls}">${e.name} [${q.name}]</div>
-      <div class="card-meta">基础 攻${e.baseAtk} 防${e.baseDef}</div>
-      <div class="card-meta">当前 攻${t.atk} 防${t.def} 速${t.spd} HP+${t.hp} ${afx?'· '+afx:''}</div>
+      <div class="card-meta">区间 攻${r.atkMin}-${r.atkMax} 防${r.defMin}-${r.defMax}</div>
+      <div class="card-meta">速${r.spd} HP+${r.hp} ${afx?'· '+afx:''}</div>
       <div class="card-meta">洗练次数 ${e.refineTimes}/3 · 持有材料 ${Game.mat}</div>
       <div class="card-meta">本次风险：${(risk*100).toFixed(1)}% 破损</div>
       <div class="card-actions">
@@ -484,15 +530,12 @@ const Render = {
     $('refineBody').innerHTML = html;
   },
 
-  /* ============================================================
-   *  商店（两个 tab：道具 | 宝石）
-   * ============================================================ */
+  /* ---------- 商店（两个 tab） ---------- */
   shopPage(opts){
     opts = opts || {};
     const tab = opts.tab || 'item';
     const page = opts.page || 1;
 
-    // tab 头
     let html = `<div style="display:flex;gap:6px;margin-bottom:6px;">
       <button class="btn ${tab==='item'?'primary':''}" onclick="Nav._show('shop',{tab:'item',page:1})">道具</button>
       <button class="btn ${tab==='gem'?'primary':''}" onclick="Nav._show('shop',{tab:'gem',page:1})">宝石</button>
@@ -516,6 +559,7 @@ const Render = {
     items.push({label:`宠物蛋`, sub:`500金 · 随机普通/优秀`, action:`Shop.buyPetEgg()`});
     SHOP_LIST.forEach(name=>{
       const b = EQUIP_BASE[name];
+      if(!b) return;
       items.push({label:name, sub:`[${SLOT_NAME[b.slot]}] 基础攻${b.atk} 防${b.def} · ${b.buy}金`, action:`Shop.buyEquip('${name}')`});
     });
 
@@ -544,11 +588,9 @@ const Render = {
   _shopGemTab(page){
     const order = ['red','blue','green','purple','orange','black','yellow','white'];
     let html = `<div class="card">
-      <div class="card-title">💎 宝石镶嵌</div>
-      <div class="card-meta">打开镶嵌界面，把宝石镶到装备上</div>
-      <div class="card-actions"><button class="btn primary" onclick="Shop.openSocketPage()">打开镶嵌</button></div>
+      <div class="card-title">💎 宝石商店</div>
+      <div class="card-meta">购买宝石后，去「人物」或「背包」点装备卡片 → 镶嵌</div>
     </div>`;
-
     html += `<div class="dim" style="font-size:11px;padding:6px 0 4px;">普通宝石 · ${GEM_SHOP_PRICE}金/颗</div>`;
     order.forEach(k=>{
       const g = GEMS[k];
@@ -565,6 +607,7 @@ const Render = {
     return html;
   },
 
+  /* ---------- 任务 ---------- */
   questPage(page){
     page = page || 1;
     Quest.refreshPool(false);
@@ -605,6 +648,7 @@ const Render = {
       : '';
   },
 
+  /* ---------- 宠物 ---------- */
   petPage(){
     const limit = petSlotLimit();
     const activeCount = Game.activePets.length;
@@ -652,7 +696,14 @@ const Render = {
   }
 };
 
+/* 定时刷新 */
 setInterval(()=>{
   if(!$('page-home').classList.contains('hidden')) Render.top();
   if(Game.battle) Combat.render();
+  // 宠物复活检查
+  if(tickPetRespawn && tickPetRespawn()){
+    if(!$('page-pet').classList.contains('hidden')) Render.petPage();
+    if(Game.battle) Combat.render();
+    Render.top();
+  }
 }, 1500);

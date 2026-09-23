@@ -1,12 +1,12 @@
 /* ============================================================
  *  state.js  —— Game 状态 + 装备生成 + 存档
  *
- *  本轮新增：
- *   - Game.gems：所有宝石（数组）
- *   - Game.fragments：碎片数量（{ gemKey: { normal: n, rare: n, legend: n } }）
- *   - 装备新增 sockets: [null, null, null]（3 孔）
- *   - 装备新增 affix（唯一特色词条，含新属性）
- *   - calcAttr() 增加 连击率/反击率/吸血率/固定吸血/暴击率 计算（含宝石加成）
+ *  本轮改动：
+ *   - 装备生成带 min/max（atkMax = atkMin × 2.2，defMax = defMin × 2.0）
+ *   - calcAttr 返回 atkMin/atkMax / defMin/defMax 区间
+ *   - 攻击加成（词条/宝石）只加到 max
+ *   - 每回合固定回蓝 2
+ *   - 掉落按区域分档
  * ============================================================ */
 
 const Game = {
@@ -16,15 +16,14 @@ const Game = {
   ui:{ areaId:null, floorIdx:null },
   battle:null,
   pets:[], activePets:[],
-  gems:[],           // 所有宝石（对象数组）
-  fragments:{},      // 碎片：{ red: {normal:0, rare:0, legend:0}, ... }
+  gems:[], fragments:{},
   stats:{ kills:0, deaths:0 }
 };
 
 function initGame(){
   Game.player = {
     lv:1, exp:0, hp:100, maxHp:100, mp:50, maxMp:50,
-    baseAtk:10, baseDef:5, baseSpd:10,
+    baseAtkMin:10, baseAtkMax:15,baseDefMin:5,baseDefMax:8, baseSpd:10,
     gold:100, potion:5, potionMp:3, bagMax:30, rage:0
   };
   Game.bag = [];
@@ -46,7 +45,7 @@ function initGame(){
   Quest.refreshPool(true);
 }
 
-/* ---- 装备生成 ---- */
+/* ---- 品质 ---- */
 function rollQuality(boost){
   const r = Math.random();
   const epicC = 0.03 + (boost||0);
@@ -58,23 +57,29 @@ function rollQuality(boost){
   return 'normal';
 }
 
+/* ---- 装备生成（带 min/max） ---- */
 function makeEquip(name, quality){
   const base = EQUIP_BASE[name];
+  if(!base) return null;
   const q = quality || rollQuality();
   const qc = QUALITY[q];
-  const atkMul = qc.bMin + Math.random() * (qc.bMax - qc.bMin);
-  const defMul = qc.bMin + Math.random() * (qc.bMax - qc.bMin);
+  // 品质影响 min（优秀 +15% / 精良 +30% / 史诗 +55%）
+  const qMin = 1 + qc.rate;
+  const atkMin = Math.round(base.atk * qMin);
+  const defMin = Math.round(base.def * qMin);
+  const atkMax = Math.round(atkMin * 2.2);
+  const defMax = Math.round(defMin * 2.0);
   const eq = {
-    uid: uid(), name, slot: base.slot,
-    baseAtk: Math.round(base.atk * atkMul),
-    baseDef: Math.round(base.def * defMul),
-    baseSpd: base.spd||0, baseHp: base.hp||0,
+    uid: uid(), name, slot: base.slot, tier: base.tier,
+    atkMin, atkMax, defMin, defMax,
+    spd: base.spd || 0,
+    hp:  base.hp  || 0,
     quality: q,
     refineAtk:0, refineDef:0, refineHp:0, refineTimes:0,
     affix:null, affixVal:0,
-    sockets: [null, null, null]       // 3 孔，null 或 { uid, key, quality }
+    sockets: [null, null, null]
   };
-  // 特色词条：品质决定概率（优秀 5% / 精良 15% / 史诗 40%）
+  // 词条
   const chance = AFFIX_CHANCE[q] || 0;
   if(Math.random() < chance){
     const a = pick(AFFIXES);
@@ -85,18 +90,36 @@ function makeEquip(name, quality){
   return eq;
 }
 
-/* 装备本身属性（不含宝石） */
-function equipStat(eq){
-  const r = QUALITY[eq.quality].rate;
-  return {
-    atk: Math.floor((eq.baseAtk + eq.refineAtk) * (1 + r)),
-    def: Math.floor((eq.baseDef + eq.refineDef) * (1 + r)),
-    spd: Math.floor((eq.baseSpd||0) * (1 + r*0.5)),
-    hp:  (eq.baseHp||0) + eq.refineHp
-  };
+/* ---- 装备基础区间（含词条、不含宝石） ----
+ * 攻击、防御词条只加到 max
+ */
+function equipBaseRange(eq){
+  if(!eq) return { atkMin:0, atkMax:0, defMin:0, defMax:0, spd:0, hp:0 };
+  let atkMin = eq.atkMin, atkMax = eq.atkMax;
+  let defMin = eq.defMin, defMax = eq.defMax;
+  let spd = eq.spd || 0;
+  let hp  = eq.hp  || 0;
+  // 洗练加成（加到 min 和 max 两端）
+  atkMin += eq.refineAtk || 0;
+  atkMax += eq.refineAtk || 0;
+  defMin += eq.refineDef || 0;
+  defMax += eq.refineDef || 0;
+  hp += eq.refineHp || 0;
+  // 词条
+  if(eq.affix){
+    const v = eq.affixVal || 0;
+    switch(eq.affix){
+      case 'atk':    atkMax += v; break;   // 只加 max
+      case 'def':    defMax += v; break;
+      case 'spd':    spd += v; break;
+      case 'hp':     hp += v; break;
+      // 其他（暴击/连击/吸血）在别处处理
+    }
+  }
+  return { atkMin, atkMax, defMin, defMax, spd, hp };
 }
 
-/* 装备的宝石加成（累加） */
+/* ---- 宝石加成（离散值，不加到区间，直接叠加到 max） ---- */
 function equipGemBonus(eq){
   const bonus = { atk:0, def:0, hp:0, spd:0,
                   combo:0, counter:0, lsPct:0, lsFlat:0, crit:0 };
@@ -110,26 +133,24 @@ function equipGemBonus(eq){
   return bonus;
 }
 
-/* 装备 + 宝石 的完整加成 */
-function equipFullBonus(eq){
-  const base = equipStat(eq);
-  const gem = equipGemBonus(eq);
-  // 词条附加
-  let affixStat = {};
-  if(eq && eq.affix){
-    affixStat[eq.affix] = eq.affixVal;
-  }
+/* ---- 装备最终区间（基础 + 宝石） ----
+ * 宝石攻击只加到 max
+ */
+function equipFullRange(eq){
+  const b = equipBaseRange(eq);
+  const g = equipGemBonus(eq);
   return {
-    atk:    base.atk    + (gem.atk || 0)    + (affixStat.atk || 0),
-    def:    base.def    + (gem.def || 0)    + (affixStat.def || 0),
-    spd:    base.spd    + (gem.spd || 0)    + (affixStat.spd || 0),
-    hp:     base.hp     + (gem.hp || 0)     + (affixStat.hp || 0),
-    combo:  (gem.combo || 0)   + (affixStat.combo || 0),
-    counter:(gem.counter || 0) + (affixStat.counter || 0),
-    lsPct:  (gem.lsPct || 0)   + (affixStat.lsPct || 0),
-    lsFlat: (gem.lsFlat || 0)  + (affixStat.lsFlat || 0),
-    crit:   (gem.crit || 0)    + (affixStat.crit || 0),
-    critd:  (affixStat.critd || 0)
+    atkMin: b.atkMin,
+    atkMax: b.atkMax + g.atk,
+    defMin: b.defMin,
+    defMax: b.defMax + g.def,
+    spd: b.spd + g.spd,
+    hp:  b.hp + g.hp,
+    combo: g.combo,
+    counter: g.counter,
+    lsPct: g.lsPct,
+    lsFlat: g.lsFlat,
+    crit: g.crit
   };
 }
 
@@ -140,19 +161,34 @@ function equipAffixDesc(eq){
   return a ? a.desc(eq.affixVal) : '';
 }
 
-/* ---- 属性计算（含宝石、词条、宠物被动） ---- */
+/* ---- 玩家属性（区间） ---- */
 function calcAttr(){
-  let atk = Game.player.baseAtk, def = Game.player.baseDef, spd = Game.player.baseSpd, addHp = 0;
+  let atkMin = Game.player.baseAtkMin, atkMax = Game.player.baseAtkMax;
+  let defMin = Game.player.baseDefMin, defMax = Game.player.baseDefMax;
+  let spd = Game.player.baseSpd, addHp = 0;
   let combo = 0, counter = 0, lsPct = 0, lsFlat = 0;
   let crit = 0.12, critD = 1.3;
   for(const s in Game.worn){
     const e = Game.worn[s]; if(!e) continue;
-    const b = equipFullBonus(e);
-    atk += b.atk; def += b.def; spd += b.spd; addHp += b.hp;
-    combo += b.combo; counter += b.counter;
-    lsPct += b.lsPct; lsFlat += b.lsFlat;
-    crit += b.crit / 100;
-    critD += (b.critd || 0) / 100;
+    const r = equipFullRange(e);
+    atkMin += r.atkMin; atkMax += r.atkMax;
+    defMin += r.defMin; defMax += r.defMax;
+    spd += r.spd; addHp += r.hp;
+    combo += r.combo; counter += r.counter;
+    lsPct += r.lsPct; lsFlat += r.lsFlat;
+    crit += r.crit / 100;
+    // 词条：暴击率/暴伤/连击/反击/吸血/固吸
+    if(e.affix){
+      const v = e.affixVal || 0;
+      switch(e.affix){
+        case 'crit':   crit += v/100; break;
+        case 'critd':  critD += v/100; break;
+        case 'combo':  combo += v; break;
+        case 'counter':counter += v; break;
+        case 'lsPct':  lsPct += v; break;
+        case 'lsFlat': lsFlat += v; break;
+      }
+    }
   }
   // 套装
   for(const sk in SETS){
@@ -161,27 +197,44 @@ function calcAttr(){
     set.members.forEach(nm=>{
       for(const s in Game.worn){ if(Game.worn[s] && Game.worn[s].name === nm){ cnt++; break; } }
     });
-    if(cnt>=3 && set.bonus3){ atk += set.bonus3.atk||0; def += set.bonus3.def||0; }
-    if(cnt>=4 && set.bonus4){ atk += set.bonus4.atk||0; def += set.bonus4.def||0; addHp += set.bonus4.hp||0; spd += set.bonus4.spd||0; }
-    if(cnt>=2 && set.bonus2){ atk += set.bonus2.atk||0; def += set.bonus2.def||0; spd += set.bonus2.spd||0; }
+    if(cnt>=3 && set.bonus3){ atkMin += set.bonus3.atk||0; atkMax += set.bonus3.atk||0; defMin += set.bonus3.def||0; defMax += set.bonus3.def||0; }
+    if(cnt>=4 && set.bonus4){ atkMin += set.bonus4.atk||0; atkMax += set.bonus4.atk||0; defMin += set.bonus4.def||0; defMax += set.bonus4.def||0; addHp += set.bonus4.hp||0; spd += set.bonus4.spd||0; }
+    if(cnt>=6 && set.bonus6){ atkMin += set.bonus6.atk||0; atkMax += set.bonus6.atk||0; defMin += set.bonus6.def||0; defMax += set.bonus6.def||0; addHp += set.bonus6.hp||0; spd += set.bonus6.spd||0; }
+    if(cnt>=2 && set.bonus2){ atkMin += set.bonus2.atk||0; atkMax += set.bonus2.atk||0; defMin += set.bonus2.def||0; defMax += set.bonus2.def||0; spd += set.bonus2.spd||0; }
   }
   // 宠物被动
   const activePetObjs = getActivePetObjects();
   activePetObjs.forEach(p=>{
     const pst = petStatFor(p);
-    atk += pst.pAtk||0; def += pst.pDef||0; spd += pst.pSpd||0;
+    atkMin += pst.pAtk||0; atkMax += pst.pAtk||0;
+    defMin += pst.pDef||0; defMax += pst.pDef||0;
+    spd += pst.pSpd||0;
     const st = petSkillStateFor(p);
     if(st.pSpdBonus) spd = Math.floor(spd * (1 + st.pSpdBonus));
-    if(st.pDefBonus) def = Math.floor(def * (1 + st.pDefBonus));
+    if(st.pDefBonus){
+      defMin = Math.floor(defMin * (1 + st.pDefBonus));
+      defMax = Math.floor(defMax * (1 + st.pDefBonus));
+    }
   });
   return {
-    atk, def, spd, addHp,
-    combo: combo/100,      // 存为小数（0.05 = 5%）
+    atkMin, atkMax, defMin, defMax,
+    spd, addHp,
+    combo: combo/100,
     counter: counter/100,
     lsPct: lsPct/100,
     lsFlat,
     crit, critD
   };
+}
+
+/* 取当前 min~max 随机攻击 */
+function rollPlayerAtk(){
+  const a = calcAttr();
+  return rnd(a.atkMin, a.atkMax);
+}
+function rollPlayerDef(){
+  const a = calcAttr();
+  return rnd(a.defMin, a.defMax);
 }
 
 function playerMaxHp(){ return Game.player.maxHp + calcAttr().addHp; }
@@ -195,8 +248,10 @@ function addExp(v){
   while(p.exp >= p.lv * 120){
     p.exp -= p.lv * 120;
     p.lv++;
-    p.baseAtk += 3;
-    p.baseDef += 1;
+    p.baseAtkMin += 3;
+    p.baseAtkMax += 4;      // 升级时 max 涨得比 min 快一点（比如 +3/+4）
+    p.baseDefMin += 1;
+    p.baseDefMax += 2;
     p.maxHp  += 15;
     p.baseSpd += 1;
     p.maxMp  += 8;
@@ -283,20 +338,37 @@ function tickRespawn(areaId, fi){
 }
 
 /* ============================================================
- *  宝石/碎片操作
+ *  掉落装备：按区域分档
  * ============================================================ */
+function rollDropEquip(areaId, monType){
+  const ar = AREA_MAP[areaId];
+  if(!ar || !ar.dropTier) return null;
+  const dt = ar.dropTier;
+  let tier;
+  if(monType === 'boss') tier = dt.boss;
+  else if(monType === 'elite'){
+    const arr = dt.elite;
+    tier = Array.isArray(arr) ? pick(arr) : arr;
+  } else {
+    tier = dt.normal;
+  }
+  const pool = EQUIP_BY_TIER[tier] || [];
+  if(pool.length === 0) return null;
+  const name = pick(pool);
+  const boost = monType === 'boss' ? 0.15 : (monType === 'elite' ? 0.08 : 0);
+  return makeEquip(name, rollQuality(boost));
+}
 
-/* 掉落：生成一颗随机品质的随机宝石 */
+/* ============================================================
+ *  宝石/碎片
+ * ============================================================ */
 function dropGem(boost){
   const key = randomGemKey();
   const q = rollGemQuality(boost);
   return makeGem(key, q);
 }
-
-/* 掉落：生成碎片 */
 function dropFragment(){
   const key = randomGemKey();
-  // 品质：普通 90% / 稀有 8% / 传说 2%
   const r = Math.random();
   const q = r < 0.02 ? 'legend' : (r < 0.10 ? 'rare' : 'normal');
   const frag = Game.fragments[key];
@@ -304,8 +376,6 @@ function dropFragment(){
   frag[q] = Math.min(FRAG_MAX_STACK, (frag[q] || 0) + 1);
   return { key, quality: q };
 }
-
-/* 合成：3 普通碎片 → 1 普通宝石（10% 出稀有） */
 function craftGem(key){
   const frag = Game.fragments[key];
   if(!frag || (frag.normal||0) < FRAG_PER_GEM) return null;
@@ -316,8 +386,6 @@ function craftGem(key){
   Game.gems.push(gem);
   return gem;
 }
-
-/* 分级升级碎片：3 普通碎片 → 1 稀有碎片 */
 function upgradeFragment(key, fromQ, toQ){
   const frag = Game.fragments[key];
   if(!frag) return false;
@@ -331,10 +399,10 @@ function upgradeFragment(key, fromQ, toQ){
  *  存档
  * ============================================================ */
 const Save = {
-  KEY: 'legend_bw_v9',
+  KEY: 'legend_bw_v10',
   pack(){
     return {
-      v:9,
+      v:10,
       player: Game.player, bag: Game.bag, worn: Game.worn,
       mat: Game.mat, areaState: Game.areaState, flags: Game.flags,
       quest: Game.quest, pets: Game.pets, activePets: Game.activePets,
@@ -351,13 +419,13 @@ const Save = {
   load(){
     const s = localStorage.getItem(this.KEY);
     if(!s){
-      const old = localStorage.getItem('legend_bw_v8') || localStorage.getItem('legend_bw_v6');
+      const old = localStorage.getItem('legend_bw_v9') || localStorage.getItem('legend_bw_v8') || localStorage.getItem('legend_bw_v6');
       if(old){ return this._migrate(old); }
       return toast("无存档");
     }
     try{
       const d = JSON.parse(s);
-      if(d.v !== 9) return toast("存档版本不符");
+      if(d.v !== 10) return toast("存档版本不符");
       Object.assign(Game, {
         player: d.player, bag: d.bag, worn: d.worn,
         mat: d.mat, areaState: d.areaState, flags: d.flags,
@@ -366,22 +434,12 @@ const Save = {
         stats: d.stats, ui: d.ui || { areaId:null, floorIdx:null },
         battle: null
       });
-      // 兼容旧数据
       if(Game.player.mp == null){ Game.player.mp = 50; Game.player.maxMp = 50; }
       if(Game.player.potionMp == null) Game.player.potionMp = 0;
-      // 装备补 sockets
-      const fixEquip = (e)=>{
-        if(!e) return;
-        if(!e.sockets) e.sockets = [null, null, null];
-        else while(e.sockets.length < 3) e.sockets.push(null);
-      };
-      Game.bag.forEach(fixEquip);
-      for(const s in Game.worn) fixEquip(Game.worn[s]);
-      // 碎片补全
+      this._fixEquipData();
       Object.keys(GEMS).forEach(k=>{
         if(!Game.fragments[k]) Game.fragments[k] = { normal:0, rare:0, legend:0 };
       });
-      // 宠物补全
       Game.pets.forEach(p=>{
         if(p.hp == null) p.hp = petStatFor(p).hp;
         if(p.downUntil == null) p.downUntil = 0;
@@ -391,10 +449,60 @@ const Save = {
       toast("读档完成");
     }catch(e){ toast("读档失败"); }
   },
+  /* 兼容旧存档：把旧 atk/def/baseAtk 转成 min/max */
+  _fixEquipData(){
+    const convert = (e)=>{
+      if(!e) return;
+      if(e.atkMin === undefined){
+        // 旧数据只有 baseAtk / baseDef
+        const base = EQUIP_BASE[e.name] || { atk: 0, def: 0 };
+        const qc = QUALITY[e.quality] || QUALITY.normal;
+        const atk0 = e.baseAtk || base.atk || 0;
+        const def0 = e.baseDef || base.def || 0;
+        e.atkMin = Math.round(atk0);
+        e.atkMax = Math.round(atk0 * 2.2);
+        e.defMin = Math.round(def0);
+        e.defMax = Math.round(def0 * 2.0);
+        e.spd = e.baseSpd || base.spd || 0;
+        e.hp  = e.baseHp  || base.hp  || 0;
+        e.tier = base.tier || 1;
+        delete e.baseAtk; delete e.baseDef; delete e.baseSpd; delete e.baseHp;
+      }
+      if(!e.sockets) e.sockets = [null, null, null];
+      while(e.sockets.length < 3) e.sockets.push(null);
+    };
+    Game.bag.forEach(convert);
+    for(const s in Game.worn) convert(Game.worn[s]);
+  },
   _migrate(raw){
     try{
       const d = JSON.parse(raw);
-      // v8 存档
+      // v9 存档
+      if(d.v === 9){
+        initGame();
+        Object.assign(Game.player, d.player || {});
+        Game.bag = d.bag || [];
+        Game.worn = d.worn || { weapon:null, helmet:null, cloth:null, shoe:null, belt:null, ring:null, neck:null };
+        Game.mat = d.mat || 0;
+        Game.areaState = d.areaState || {};
+        Game.flags = d.flags || { dragonCity:false };
+        Game.quest = d.quest || Game.quest;
+        Game.pets = d.pets || [];
+        Game.activePets = d.activePets || [];
+        Game.gems = d.gems || [];
+        Game.fragments = d.fragments || {};
+        Game.stats = d.stats || { kills:0, deaths:0 };
+        Game.ui = d.ui || { areaId:null, floorIdx:null };
+        this._fixEquipData();
+        Object.keys(GEMS).forEach(k=>{
+          if(!Game.fragments[k]) Game.fragments[k] = { normal:0, rare:0, legend:0 };
+        });
+        Save.auto();
+        Nav.home(); Render.top(); Render.home();
+        toast("v9 存档已升级到 v10");
+        return;
+      }
+      // v8
       if(d.v === 8){
         initGame();
         Object.assign(Game.player, d.player || {});
@@ -408,19 +516,13 @@ const Save = {
         Game.activePets = d.activePets || [];
         Game.stats = d.stats || { kills:0, deaths:0 };
         Game.ui = d.ui || { areaId:null, floorIdx:null };
-        // 装备补 sockets
-        const fixEquip = (e)=>{
-          if(!e) return;
-          if(!e.sockets) e.sockets = [null, null, null];
-        };
-        Game.bag.forEach(fixEquip);
-        for(const s in Game.worn) fixEquip(Game.worn[s]);
+        this._fixEquipData();
         Save.auto();
         Nav.home(); Render.top(); Render.home();
-        toast("v8 存档已升级到 v9");
+        toast("v8 存档已升级到 v10");
         return;
       }
-      // v6 老存档
+      // v6
       if(d.v === 6){
         const oldPet = d.pet;
         initGame();
@@ -447,15 +549,10 @@ const Save = {
           Game.pets = [newPet];
           Game.activePets = [newPet.uid];
         }
-        const fixEquip = (e)=>{
-          if(!e) return;
-          if(!e.sockets) e.sockets = [null, null, null];
-        };
-        Game.bag.forEach(fixEquip);
-        for(const s in Game.worn) fixEquip(Game.worn[s]);
+        this._fixEquipData();
         Save.auto();
         Nav.home(); Render.top(); Render.home();
-        toast("v6 存档已迁移到 v9");
+        toast("v6 存档已迁移到 v10");
         return;
       }
       toast("存档版本过旧，无法迁移");
@@ -464,6 +561,7 @@ const Save = {
   reset(){
     confirmBox("确定全部重置？", ()=>{
       localStorage.removeItem(this.KEY);
+      localStorage.removeItem('legend_bw_v9');
       localStorage.removeItem('legend_bw_v8');
       localStorage.removeItem('legend_bw_v6');
       initGame();

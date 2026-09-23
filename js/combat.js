@@ -1,9 +1,10 @@
 /* ============================================================
- *  combat.js —— 战斗系统（含连击/反击/吸血/固定吸血）
+ *  combat.js —— 战斗系统
  *
- *  本轮新增：
- *   - 玩家/宠物的连击、反击、吸血、固定吸血、暴击触发
- *   - 击杀掉落宝石/碎片
+ *  本轮改动：
+ *   - 伤害随机取 min~max
+ *   - 每回合固定回蓝 2
+ *   - 掉落按区域分档
  * ============================================================ */
 
 function _sleep(ms){
@@ -89,7 +90,7 @@ function _returnFromCharge(attackerEl, backMs){
   }, backMs + 50);
 }
 
-/* ---------- 技能 emoji / 光效 ---------- */
+/* ---------- 技能特效 ---------- */
 function _popSkillEmoji(targetEl, emoji){
   if(!targetEl || !emoji) return;
   const r = targetEl.getBoundingClientRect();
@@ -180,7 +181,9 @@ const Combat = {
     const mHp = playerMaxHp(), mMp = playerMaxMp();
     const hpP = clamp(Game.player.hp/mHp,0,1)*100;
     const mpP = clamp(Game.player.mp/mMp,0,1)*100;
+    const rage = Game.player.rage || 0;
 
+    // 宠物
     const activePetObjs = Game.activePets
       .map(u => Game.pets.find(p=>p.uid === u))
       .filter(Boolean);
@@ -208,9 +211,7 @@ const Combat = {
       }
     });
 
-    // 玩家方块下方显示属性简版
-    const attrLine = `连${(a.combo*100).toFixed(0)}% 反${(a.counter*100).toFixed(0)}% 吸${(a.lsPct*100).toFixed(0)}%`;
-
+    // 玩家方块（100px 高）—— 血/蓝条加粗带数字，无属性文字
     $('bLeft').innerHTML = `
       <div class="unit-box p-box" id="pBox">
         <div class="u-emoji">🧙</div>
@@ -221,13 +222,14 @@ const Combat = {
         </div>
         <div class="u-bar mp">
           <i style="width:${mpP}%"></i>
-          <span class="u-num" style="font-size:7px;color:#bbb;">${Math.floor(Game.player.mp)}</span>
+          <span class="u-num">${Math.floor(Game.player.mp)}</span>
         </div>
       </div>
-      <div style="font-size:9px;color:#999;text-align:center;line-height:1.3;">${attrLine}</div>
+      <div class="rage-line">怒 ${rage}/${RAGE_MAX}</div>
       ${petHtml}
     `;
 
+    // 怪物
     const grid = $('bGrid');
     grid.innerHTML = '';
     b.monsters.forEach((m, i)=>{
@@ -261,7 +263,7 @@ const Combat = {
 
     if(b.pendingSkill) $('bTip').textContent = `点击怪物释放 ${SKILLS[b.pendingSkill].name}`;
     else if(b.auto) $('bTip').textContent = '自动战斗中…';
-    else $('bTip').textContent = `点击怪物攻击 · 怒 ${Game.player.rage||0}/${RAGE_MAX}`;
+    else $('bTip').textContent = `点击怪物攻击 · 怒 ${rage}/${RAGE_MAX} · 攻 ${a.atkMin}-${a.atkMax} 防 ${a.defMin}-${a.defMax}`;
   },
 
   _refreshSkillBtn(id, key){
@@ -477,7 +479,8 @@ const Combat = {
       if(Game.player.hp <= 0){ this._onPlayerDead(); return; }
       if(b.monsters.every(x=>x.dead)){ this._onGroupCleared(); return; }
 
-      Game.player.mp = Math.min(playerMaxMp(), Game.player.mp + 3 + Math.floor(playerMaxMp()*0.03));
+      // 每回合固定回蓝 2
+      Game.player.mp = Math.min(playerMaxMp(), Game.player.mp + MP_REGEN_PER_TURN);
       if(b.buff.zhanshen > 0) b.buff.zhanshen--;
       for(const k in b.cds){ if(b.cds[k] > 0) b.cds[k]--; }
       Game.activePets.forEach(u=>{
@@ -513,7 +516,7 @@ const Combat = {
         const p = Game.pets.find(x=>x.uid === u);
         if(p && p.skillCd){ for(const k in p.skillCd){ if(p.skillCd[k] > 0) p.skillCd[k]--; } }
       });
-      Game.player.mp = Math.min(playerMaxMp(), Game.player.mp + 3 + Math.floor(playerMaxMp()*0.03));
+      Game.player.mp = Math.min(playerMaxMp(), Game.player.mp + MP_REGEN_PER_TURN);
       this.render();
       Render.top();
       Save.auto();
@@ -523,7 +526,7 @@ const Combat = {
   },
 
   /* ============================================================
-   *  玩家行动 —— 走到目标 + 突刺 + 返回
+   *  玩家行动
    * ============================================================ */
   async _doPlayerActionAnimated(action, atkMul, isAuto){
     const playerEl = $('pBox');
@@ -544,7 +547,6 @@ const Combat = {
     }
   },
 
-  /* 玩家出手（含连击/吸血） */
   _doPlayerAction(action, atkMul){
     const b = Game.battle; if(!b) return;
     const a = calcAttr();
@@ -552,10 +554,11 @@ const Combat = {
     if(action.type === 'attack'){
       const t = action.target;
       if(!t || t.dead) return;
-      this._playerHit(t, a.atk * atkMul);
-      // 连击
+      const baseAtk = rnd(a.atkMin, a.atkMax) * atkMul;
+      this._playerHit(t, baseAtk);
       if(Math.random() < a.combo && !t.dead){
-        this._playerHit(t, a.atk * atkMul * 0.6, '连击');
+        const baseAtk2 = rnd(a.atkMin, a.atkMax) * atkMul * 0.6;
+        this._playerHit(t, baseAtk2, '连击');
       }
       Game.player.rage = Math.min(RAGE_MAX, (Game.player.rage||0) + 1);
     }
@@ -571,18 +574,21 @@ const Combat = {
       if(key === 'liehuo'){
         const t = action.target;
         if(!t || t.dead) return;
-        this._playerHit(t, a.atk * atkMul * 1.8);
+        const baseAtk = rnd(a.atkMin, a.atkMax) * atkMul * 1.8;
+        this._playerHit(t, baseAtk);
         _popSkillEmoji(document.getElementById('mon-'+t.mid), '🔥');
         _pulseCard(t, 'anim-fire-pulse');
         if(Math.random() < a.combo && !t.dead){
-          this._playerHit(t, a.atk * atkMul * 1.8 * 0.6, '连击');
+          const baseAtk2 = rnd(a.atkMin, a.atkMax) * atkMul * 1.8 * 0.6;
+          this._playerHit(t, baseAtk2, '连击');
         }
       }
       else if(key === 'banyue'){
         _popSkillEmoji($('bGrid'), '⚔️');
         _popSweep();
         b.monsters.filter(m=>!m.dead).forEach(t=>{
-          this._playerHit(t, a.atk * atkMul * 0.9);
+          const baseAtk = rnd(a.atkMin, a.atkMax) * atkMul * 0.9;
+          this._playerHit(t, baseAtk);
         });
       }
       else if(key === 'zhiyu'){
@@ -604,13 +610,13 @@ const Combat = {
       const t = action.target;
       if(!t || t.dead) return;
       Game.player.rage = 0;
-      this._playerHit(t, a.atk * atkMul * 3.0, '怒斩', true);
+      const baseAtk = rnd(a.atkMin, a.atkMax) * atkMul * 3.0;
+      this._playerHit(t, baseAtk, '怒斩', true);
       _popSkillEmoji(document.getElementById('mon-'+t.mid), '⚡');
       _pulseCard(t, 'anim-rage-hit');
     }
   },
 
-  /* 玩家一次命中（含暴击、吸血、固定吸血） */
   _playerHit(target, baseAtk, tag, forceCrit){
     const a = calcAttr();
     let dmg = Math.max(1, Math.floor(baseAtk - target.def));
@@ -623,15 +629,12 @@ const Combat = {
     _hitMonsterAnim(target, isCrit);
     this._floatMon(target, `${tagTxt}-${dmg}`, isCrit ? 'crit' : 'normal');
 
-    // 吸血
     this._applyLifesteal(dmg, 'player');
 
     if(target.hp <= 0 && !target.dead) this._killMonster(target);
   },
 
-  /* 吸血逻辑：优先百分比，其次固定值 */
   _applyLifesteal(dmg, who){
-    // who: 'player' | pet
     if(who === 'player'){
       const a = calcAttr();
       if(a.lsPct > 0){
@@ -648,10 +651,8 @@ const Combat = {
     }
   },
 
-  /* 宠物吸血（自己的属性），宠物用 a-like 结构 */
   _petLifesteal(p, dmg){
     const pst = petStatFor(p);
-    // 宠物技能里的嗜血（12% 吸血）
     const ps = petSkillStateFor(p);
     if(ps.ls > 0){
       const heal = Math.floor(dmg * ps.ls);
@@ -734,7 +735,7 @@ const Combat = {
   },
 
   /* ============================================================
-   *  怪物行动（玩家反击在此触发）
+   *  怪物行动
    * ============================================================ */
   async _doMonsterActionAnimated(m, defMul, isAuto){
     const card = document.getElementById('mon-' + m.mid);
@@ -822,15 +823,15 @@ const Combat = {
         if(m.hp <= 0 && !m.dead) this._killMonster(m);
       }
     }else{
-      // 攻击玩家
-      let dmg = Math.max(1, Math.floor(atkVal - a.def * defMulFinal * 0.9));
+      // 玩家防御也取区间随机
+      const playerDef = rnd(a.defMin, a.defMax);
+      let dmg = Math.max(1, Math.floor(atkVal - playerDef * defMulFinal * 0.9));
       let isCrit = Math.random() < 0.08;
       if(isCrit) dmg = Math.floor(dmg * 1.25);
       Game.player.hp -= dmg;
       _hitPlayerAnim();
       this._floatPlayer(`-${dmg}`, isCrit ? 'crit' : 'normal');
 
-      // 反伤（宠物技能）
       let totalReflect = 0;
       getActivePetObjects().forEach(p=>{
         const ps = petSkillStateFor(p);
@@ -843,9 +844,9 @@ const Combat = {
         if(m.hp <= 0 && !m.dead) this._killMonster(m);
       }
 
-      // 玩家反击（概率触发）
+      // 玩家反击
       if(!m.dead && Math.random() < a.counter){
-        const counterDmg = Math.max(1, Math.floor(a.atk - m.def));
+        const counterDmg = Math.max(1, Math.floor(rnd(a.atkMin, a.atkMax) - m.def));
         m.hp -= counterDmg;
         _hitMonsterAnim(m, false);
         this._floatMon(m, `[反击]-${counterDmg}`, 'normal');
@@ -861,7 +862,7 @@ const Combat = {
   },
 
   /* ============================================================
-   *  击杀（掉落宝石/碎片）
+   *  击杀
    * ============================================================ */
   _killMonster(m){
     if(m.dead) return;
@@ -869,7 +870,7 @@ const Combat = {
     m.hp = 0;
     m.deathTs = Date.now();
     Game.stats.kills++;
-    Game.player.mp = Math.min(playerMaxMp(), Game.player.mp + 5);
+    Game.player.mp = Math.min(playerMaxMp(), Game.player.mp + MP_REGEN_PER_KILL);
 
     const card = document.getElementById('mon-' + m.mid);
     if(card){ card.classList.add('dead'); card.onclick = null; }
@@ -880,28 +881,29 @@ const Combat = {
     getActivePetObjects().forEach(p=>petAddExp(p, Math.floor(m.exp * 0.5)));
     Quest.onKill(m.protoId);
 
+    // 掉落装备（按区域分档）
     let dropChance = m.isBoss ? 0.85 : (m.elite ? 0.55 : 0.18);
     if(Math.random() < dropChance){
-      const pool = ["木剑","铁剑","布帽","布衣","青铜戒指","木项链"];
-      if(m.isBoss && m.dropEquip) pool.push(...m.dropEquip);
-      const name = pick(pool);
-      const boost = m.isBoss ? 0.15 : (m.elite ? 0.08 : 0);
-      const eq = makeEquip(name, rollQuality(boost));
-      if(Game.bag.length < Game.player.bagMax){
-        Game.bag.push(eq);
-        showBattleDrop(`✨ ${eq.name}[${QUALITY[eq.quality].name}] +${gold}金`);
-        Quest.onBagChange();
+      const monType = m.isBoss ? 'boss' : (m.elite ? 'elite' : 'normal');
+      const eq = rollDropEquip(Game.ui.areaId, monType);
+      if(eq){
+        if(Game.bag.length < Game.player.bagMax){
+          Game.bag.push(eq);
+          showBattleDrop(`✨ ${eq.name}[${QUALITY[eq.quality].name}] +${gold}金`);
+          Quest.onBagChange();
+        }else{
+          showBattleDrop(`+${gold}金 · 背包已满`);
+        }
       }else{
-        showBattleDrop(`+${gold}金 · 背包已满`);
+        showBattleDrop(`+${gold} 金币`);
       }
     }else{
       showBattleDrop(`+${gold} 金币`);
     }
 
-    // 宝石 / 碎片掉落
+    // 宝石/碎片
     this._tryDropGemOrFrag(m);
 
-    // 精英/BOSS 掉宠物蛋
     if(m.elite && Math.random() < 0.08 && Game.pets.length < PET_WAREHOUSE_MAX){
       const tpl = pick(Object.keys(PET_TEMPLATES));
       const q = pick(['good','fine','epic']);
@@ -927,7 +929,6 @@ const Combat = {
     Save.auto();
   },
 
-  /* 宝石/碎片掉落判定 */
   _tryDropGemOrFrag(m){
     let rate = GEM_DROP_RATE.normalMon;
     if(m.isBoss) rate = GEM_DROP_RATE.boss;

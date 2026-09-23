@@ -38,15 +38,15 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .q-epic{color:var(--q4);font-weight:700;}
 .q-epic::before{content:"★ ";}
 
+.cmp-up{color:#6e6;font-weight:700;margin-left:2px;}
+.cmp-down{color:#e66;font-weight:700;margin-left:2px;}
+
 .bar{height:12px;background:#0e0e0e;border:1px solid var(--line2);border-radius:3px;overflow:hidden;position:relative;}
 .bar>i{display:block;height:100%;background:#e0e0e0;transition:width .18s;}
 .bar>.txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;text-shadow:0 0 2px #fff,0 0 2px #fff;}
 .bar.mp>i{background:#8a8a9a;}
 .bar.exp>i{background:#777;}
 
-/* ============================================================
- *  固定 480×800 容器
- * ============================================================ */
 #app{
   width:480px;
   height:800px;
@@ -74,13 +74,11 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .pager button{padding:4px 12px;border:1px solid var(--line2);border-radius:4px;font-size:12px;}
 .pager button:disabled{opacity:.3;}
 
-.hud{padding:6px 10px;border-bottom:1px solid var(--line);background:var(--panel);font-size:12px;}
-.hud .hud-row{display:flex;justify-content:space-between;gap:6px;margin-bottom:3px;align-items:center;}
+.hud{padding:8px 10px;border-bottom:1px solid var(--line);background:var(--panel);font-size:14px;}
+.hud .hud-row{margin-bottom:4px;}
 .hud .hud-row:last-child{margin-bottom:0;}
-.hud .bars{display:flex;gap:4px;}
-.hud .bars .bar{flex:1;}
-.hud .stats{display:flex;gap:8px;font-size:11px;color:var(--tx2);flex-wrap:wrap;}
-.hud .stats b{color:var(--tx);}
+.hud .hud-row.bars{display:flex;gap:4px;}
+.hud .hud-row.bars .bar{flex:1;width:100%;}
 
 .home-body{flex:1;padding:6px 10px;display:flex;flex-direction:column;gap:5px;overflow:hidden;min-height:0;}
 .menu-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;}
@@ -101,12 +99,13 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .card .card-meta{font-size:11px;color:var(--tx3);margin-bottom:4px;}
 .card .card-actions{display:flex;gap:4px;flex-wrap:wrap;}
 .card .card-actions .btn{flex:1;min-width:0;margin:0;padding:5px 4px;font-size:11px;}
+.card.clickable{cursor:pointer;}
+.card.clickable:active{background:#2a2a2a;}
 .cards-list{display:flex;flex-direction:column;gap:5px;flex:1;min-height:0;}
 
 /* ============================================================
- *  战斗界面 —— 三栏布局
+ *  战斗界面
  * ============================================================ */
-
 .b-field{
   flex:1;
   display:grid;
@@ -116,7 +115,6 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   position:relative;
   overflow:hidden;
 }
-
 .b-field::before{
   content:'';
   position:absolute;
@@ -127,19 +125,17 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   border-right:1px dashed var(--line);
   pointer-events:none;
 }
-
 .b-left{
   grid-column:1;
   display:flex;
   flex-direction:column;
-  gap:10px;
+  gap:6px;
   align-items:center;
   padding:2px 0;
   overflow:visible;
   position:relative;
   z-index:2;
 }
-
 .b-right{
   grid-column:3;
   display:flex;
@@ -150,7 +146,6 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   position:relative;
   z-index:2;
 }
-
 .b-grid{
   display:flex;
   flex-direction:column;
@@ -159,7 +154,6 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   width:100%;
 }
 
-/* ---------- 通用方块 ---------- */
 .unit-box{
   border:1px solid var(--line2);
   border-radius:6px;
@@ -170,7 +164,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   justify-content:center;
   gap:2px;
   position:relative;
-  padding:4px 3px 14px;
+  padding:4px 3px 16px;
   transition:border-color .15s, background .15s;
   flex-shrink:0;
   will-change:transform;
@@ -181,9 +175,9 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .unit-box.elite{border-color:#666;}
 .unit-box.boss{border-color:#888;background:var(--panel3);}
 
-/* 玩家方块 76×76 */
-.unit-box.p-box{ width:76px; height:76px; padding-bottom:18px; }
-.unit-box.p-box .u-emoji{ font-size:28px; line-height:1; filter:grayscale(1); }
+/* 玩家方块 76×100 */
+.unit-box.p-box{ width:76px; height:100px; padding-bottom:20px; }
+.unit-box.p-box .u-emoji{ font-size:32px; line-height:1; filter:grayscale(1); }
 .unit-box.p-box .u-lv{ font-size:11px; color:var(--tx2); line-height:1; }
 
 /* 宠物方块 64×64 */
@@ -202,7 +196,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   text-align:center;
 }
 
-/* 血条 / 蓝条 */
+/* 血条 / 蓝条 —— 统一 7px 高 */
 .unit-box .u-bar{
   position:absolute;
   left:4px; right:4px;
@@ -212,8 +206,8 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   overflow:hidden;
 }
 .unit-box .u-bar>i{ display:block; height:100%; background:#ddd; transition:width .18s; }
-.unit-box .u-bar.hp{ bottom:2px; }
-.unit-box .u-bar.mp{ bottom:-6px; height:3px; }
+.unit-box .u-bar.hp{ bottom:14px; }
+.unit-box .u-bar.mp{ bottom:4px; }
 .unit-box .u-bar.mp>i{ background:#8a8a9a; }
 .unit-box .u-bar.pet-hp>i{ background:#7a8a7a; }
 
@@ -224,7 +218,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   display:flex;
   align-items:center;
   justify-content:center;
-  font-size:9px;
+  font-size:8px;
   font-weight:700;
   color:#fff;
   text-shadow:
@@ -235,7 +229,9 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   letter-spacing:-0.3px;
 }
 
-/* 底部按钮区 */
+/* 怒气 */
+.rage-line{ font-size:10px; color:#e8a; }
+
 .b-ctrl{padding:6px 8px 10px;border-top:1px solid var(--line);background:var(--panel);}
 .b-ctrl .tip{font-size:11px;color:var(--tx3);min-height:14px;margin-bottom:3px;text-align:center;}
 .b-ctrl .row{margin-bottom:3px;}
@@ -343,6 +339,46 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 }
 
 /* ============================================================
+ *  装备详情弹窗
+ * ============================================================ */
+.modal{
+  position:fixed;inset:0;z-index:400;
+  background:rgba(0,0,0,.75);
+  display:flex;align-items:center;justify-content:center;
+  padding:20px;
+}
+.modal.hidden{display:none;}
+.modal-box{
+  background:var(--panel2);
+  border:1px solid var(--line2);
+  border-radius:10px;
+  padding:12px 14px;
+  max-width:360px;
+  width:100%;
+  max-height:80vh;
+  overflow-y:auto;
+  font-size:13px;
+}
+.modal-box .modal-title{
+  font-size:15px;margin-bottom:8px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.modal-box .modal-close{
+  padding:2px 8px;border:1px solid var(--line2);border-radius:4px;font-size:12px;
+}
+.modal-box .modal-row{
+  display:flex;justify-content:space-between;
+  padding:3px 0;font-size:12px;
+  border-bottom:1px dashed var(--line);
+}
+.modal-box .modal-row:last-child{border-bottom:none;}
+.modal-box .modal-row .lbl{color:var(--tx3);}
+.modal-box .modal-actions{
+  display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;
+}
+.modal-box .modal-actions .btn{flex:1;min-width:70px;margin:0;padding:7px 4px;font-size:12px;}
+
+/* ============================================================
  *  Toast / Confirm
  * ============================================================ */
 #toast{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:#222;color:#eee;border:1px solid #444;padding:7px 14px;border-radius:20px;font-size:12px;z-index:300;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center;}
@@ -353,42 +389,3 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 #confirm .msg{font-size:13px;margin-bottom:12px;}
 
 .pet-mini{font-size:10px;}
-/* ============================================================
- *  v9 新增样式：装备对比箭头 + 镶嵌页
- * ============================================================ */
-
-/* 对比箭头：涨绿↑ 降红↓ */
-.cmp-up{
-  color: #6e6;
-  font-weight: 700;
-  margin-left: 2px;
-}
-.cmp-down{
-  color: #e66;
-  font-weight: 700;
-  margin-left: 2px;
-}
-
-/* 镶嵌页：孔位卡片更紧凑 */
-#socketBody .card{
-  align-items: center;
-}
-
-/* 宝石图标在卡片里的居中 */
-#socketBody .card .card-title{
-  text-align: center;
-}
-
-/* 主界面扩展属性行 */
-#tExt{
-  font-size: 11px;
-  color: var(--tx3);
-  letter-spacing: 0.5px;
-}
-
-/* 背包 tab 按钮 */
-#bagList > div:first-child{
-  display: flex;
-  gap: 6px;
-  margin-bottom: 6px;
-}
