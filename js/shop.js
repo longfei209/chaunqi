@@ -1,5 +1,9 @@
 /* ============================================================
  *  shop.js  —— 商店
+ *
+ *  本轮新增：
+ *   - 卖 8 种普通宝石（200 金/颗）
+ *   - 提供"镶嵌"入口（跳转到镶嵌页）
  * ============================================================ */
 
 const Shop = {
@@ -38,5 +42,20 @@ const Shop = {
     const pet = makePet(tpl, q);
     Pet.tryAdd(pet);
     Save.auto(); Nav._show('shop'); Render.top();
+  },
+
+  /* ---- 宝石 ---- */
+  buyGem(gemKey){
+    if(Game.player.gold < GEM_SHOP_PRICE) return toast("金币不足");
+    Game.player.gold -= GEM_SHOP_PRICE;
+    const gem = makeGem(gemKey, 'normal');
+    Game.gems.push(gem);
+    toast(`购得 ${GEMS[gemKey].name}（普通）`);
+    Save.auto(); Nav._show('shop'); Render.top();
+  },
+
+  /* ---- 打开镶嵌界面 ---- */
+  openSocketPage(){
+    Nav.go('socket');
   }
 };

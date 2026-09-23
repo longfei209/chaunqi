@@ -1,11 +1,9 @@
 /* ============================================================
- *  combat.js —— 三栏布局 + 贴脸冲锋攻击 + 血条数字
+ *  combat.js —— 战斗系统（含连击/反击/吸血/固定吸血）
  *
- *  攻击节奏（手动）：
- *    1. 冲到目标边缘贴脸停下（350ms）
- *    2. 贴脸突刺一下（90ms，向前推 8px + 放大 1.15）
- *    3. 命中瞬间（扣血 + 抖动 + 飘字）
- *    4. 飞回原位（300ms）
+ *  本轮新增：
+ *   - 玩家/宠物的连击、反击、吸血、固定吸血、暴击触发
+ *   - 击杀掉落宝石/碎片
  * ============================================================ */
 
 function _sleep(ms){
@@ -18,7 +16,7 @@ function showBattleDrop(text){
   el.textContent = text;
   el.classList.add('on');
   clearTimeout(el._t);
-  el._t = setTimeout(()=>el.classList.remove('on'), 2000);
+  el._t = setTimeout(()=>el.classList.remove('on'), 2200);
 }
 
 /* ---------- 命中动画 ---------- */
@@ -58,36 +56,29 @@ function _buffPlayerAnim(){
   setTimeout(()=>el.classList.remove('anim-buff-glow'), 800);
 }
 
-/* ============================================================
- *  冲锋动作：冲到目标跟前贴脸 → 突刺一下
- * ============================================================ */
+/* ---------- 冲锋动作 ---------- */
 async function _chargeTo(attackerEl, targetEl, moveMs){
   if(!attackerEl || !targetEl) return;
-
   const a = attackerEl.getBoundingClientRect();
   const t = targetEl.getBoundingClientRect();
   const aCx = a.left + a.width/2;
+  const aCy = a.top  + a.height/2;
   const tCx = t.left + t.width/2;
-  const centerDx = tCx - aCx;
-  const sign = centerDx >= 0 ? 1 : -1;
-
-  // 攻击方半宽 + 目标半宽 + 4px 间隙 = 停下时正好贴脸不重叠
+  const tCy = t.top  + t.height/2;
+  const dx = tCx - aCx;
+  const dy = tCy - aCy;
+  const sign = dx >= 0 ? 1 : -1;
   const stopDist = (a.width/2 + t.width/2 + 4);
-  const realDx = centerDx - sign * stopDist;
-
+  const realDx = dx - sign * stopDist;
+  const realDy = dy;
   attackerEl.style.zIndex = 200;
-
-  // 第一步：冲到目标跟前（贴脸停下）
   attackerEl.style.transition = `transform ${moveMs}ms cubic-bezier(.4,0,.25,1)`;
-  attackerEl.style.transform = `translateX(${realDx}px)`;
+  attackerEl.style.transform = `translate(${realDx}px, ${realDy}px)`;
   await _sleep(moveMs);
-
-  // 第二步：贴脸突刺一下（向前推 8px + 轻微放大）
   attackerEl.style.transition = `transform 90ms cubic-bezier(.2,0,.5,1)`;
-  attackerEl.style.transform = `translateX(${realDx + sign * 8}px) scale(1.15)`;
+  attackerEl.style.transform = `translate(${realDx + sign * 8}px, ${realDy}px) scale(1.15)`;
   await _sleep(90);
 }
-
 function _returnFromCharge(attackerEl, backMs){
   if(!attackerEl) return;
   attackerEl.style.transition = `transform ${backMs}ms cubic-bezier(.4,0,.2,1)`;
@@ -183,7 +174,7 @@ const Combat = {
     const fi = Game.ui.floorIdx;
     $('bLoc').textContent = b.kind === 'boss'
       ? `${ar.name} 第${fi+1}层 · BOSS`
-      : `${ar.name} 第${fi+1}层 · 第${b.gi+1}组`;
+      : `${ar.name} 第${fi+1}层 · ${b.group ? b.group.name : ''}`;
 
     const a = calcAttr();
     const mHp = playerMaxHp(), mMp = playerMaxMp();
@@ -217,6 +208,9 @@ const Combat = {
       }
     });
 
+    // 玩家方块下方显示属性简版
+    const attrLine = `连${(a.combo*100).toFixed(0)}% 反${(a.counter*100).toFixed(0)}% 吸${(a.lsPct*100).toFixed(0)}%`;
+
     $('bLeft').innerHTML = `
       <div class="unit-box p-box" id="pBox">
         <div class="u-emoji">🧙</div>
@@ -230,6 +224,7 @@ const Combat = {
           <span class="u-num" style="font-size:7px;color:#bbb;">${Math.floor(Game.player.mp)}</span>
         </div>
       </div>
+      <div style="font-size:9px;color:#999;text-align:center;line-height:1.3;">${attrLine}</div>
       ${petHtml}
     `;
 
@@ -266,7 +261,7 @@ const Combat = {
 
     if(b.pendingSkill) $('bTip').textContent = `点击怪物释放 ${SKILLS[b.pendingSkill].name}`;
     else if(b.auto) $('bTip').textContent = '自动战斗中…';
-    else $('bTip').textContent = `点击怪物攻击 · 怒 ${Game.player.rage||0}/${RAGE_MAX} · 攻${a.atk} 防${a.def} 速${a.spd}`;
+    else $('bTip').textContent = `点击怪物攻击 · 怒 ${Game.player.rage||0}/${RAGE_MAX}`;
   },
 
   _refreshSkillBtn(id, key){
@@ -442,9 +437,6 @@ const Combat = {
     if(b){ b.auto = false; clearTimeout(b._timer); }
   },
 
-  /* ============================================================
-   *  一回合结算
-   * ============================================================ */
   async _resolveRound(action){
     const b = Game.battle; if(!b || b.resolving) return;
     b.resolving = true;
@@ -531,7 +523,7 @@ const Combat = {
   },
 
   /* ============================================================
-   *  玩家行动 —— 冲锋 + 突刺 + 返回
+   *  玩家行动 —— 走到目标 + 突刺 + 返回
    * ============================================================ */
   async _doPlayerActionAnimated(action, atkMul, isAuto){
     const playerEl = $('pBox');
@@ -543,15 +535,16 @@ const Combat = {
     const targetEl = targetM ? document.getElementById('mon-' + targetM.mid) : null;
 
     if(!isAuto && playerEl && targetEl){
-      await _chargeTo(playerEl, targetEl, 350);
+      await _chargeTo(playerEl, targetEl, 260);
       this._doPlayerAction(action, atkMul);
-      _returnFromCharge(playerEl, 300);
-      await _sleep(320);
+      _returnFromCharge(playerEl, 220);
+      await _sleep(240);
     }else{
       this._doPlayerAction(action, atkMul);
     }
   },
 
+  /* 玩家出手（含连击/吸血） */
   _doPlayerAction(action, atkMul){
     const b = Game.battle; if(!b) return;
     const a = calcAttr();
@@ -559,7 +552,11 @@ const Combat = {
     if(action.type === 'attack'){
       const t = action.target;
       if(!t || t.dead) return;
-      this._dealDamage(t, a.atk * atkMul, 'normal', true);
+      this._playerHit(t, a.atk * atkMul);
+      // 连击
+      if(Math.random() < a.combo && !t.dead){
+        this._playerHit(t, a.atk * atkMul * 0.6, '连击');
+      }
       Game.player.rage = Math.min(RAGE_MAX, (Game.player.rage||0) + 1);
     }
     else if(action.type === 'skill'){
@@ -574,15 +571,18 @@ const Combat = {
       if(key === 'liehuo'){
         const t = action.target;
         if(!t || t.dead) return;
-        this._dealDamage(t, a.atk * atkMul * 1.8, 'normal', true);
+        this._playerHit(t, a.atk * atkMul * 1.8);
         _popSkillEmoji(document.getElementById('mon-'+t.mid), '🔥');
         _pulseCard(t, 'anim-fire-pulse');
+        if(Math.random() < a.combo && !t.dead){
+          this._playerHit(t, a.atk * atkMul * 1.8 * 0.6, '连击');
+        }
       }
       else if(key === 'banyue'){
         _popSkillEmoji($('bGrid'), '⚔️');
         _popSweep();
         b.monsters.filter(m=>!m.dead).forEach(t=>{
-          this._dealDamage(t, a.atk * atkMul * 0.9, 'normal', true);
+          this._playerHit(t, a.atk * atkMul * 0.9);
         });
       }
       else if(key === 'zhiyu'){
@@ -604,34 +604,65 @@ const Combat = {
       const t = action.target;
       if(!t || t.dead) return;
       Game.player.rage = 0;
-      this._dealDamage(t, a.atk * atkMul * 3.0, 'crit', true);
+      this._playerHit(t, a.atk * atkMul * 3.0, '怒斩', true);
       _popSkillEmoji(document.getElementById('mon-'+t.mid), '⚡');
       _pulseCard(t, 'anim-rage-hit');
     }
   },
 
-  _dealDamage(target, baseAtk, forceType, fromMe){
+  /* 玩家一次命中（含暴击、吸血、固定吸血） */
+  _playerHit(target, baseAtk, tag, forceCrit){
     const a = calcAttr();
     let dmg = Math.max(1, Math.floor(baseAtk - target.def));
     let isCrit = false;
-    if(forceType === 'crit') isCrit = true;
+    if(forceCrit) isCrit = true;
     else if(Math.random() < a.crit){ dmg = Math.floor(dmg * a.critD); isCrit = true; }
     target.hp -= dmg;
-    _hitMonsterAnim(target, isCrit);
-    this._floatMon(target, `-${dmg}`, isCrit ? 'crit' : 'normal');
 
-    if(fromMe && a.ls > 0){
-      const heal = Math.floor(dmg * a.ls);
-      if(heal > 0){
+    const tagTxt = tag ? `[${tag}]` : '';
+    _hitMonsterAnim(target, isCrit);
+    this._floatMon(target, `${tagTxt}-${dmg}`, isCrit ? 'crit' : 'normal');
+
+    // 吸血
+    this._applyLifesteal(dmg, 'player');
+
+    if(target.hp <= 0 && !target.dead) this._killMonster(target);
+  },
+
+  /* 吸血逻辑：优先百分比，其次固定值 */
+  _applyLifesteal(dmg, who){
+    // who: 'player' | pet
+    if(who === 'player'){
+      const a = calcAttr();
+      if(a.lsPct > 0){
+        const heal = Math.floor(dmg * a.lsPct);
+        if(heal > 0){
+          Game.player.hp = Math.min(playerMaxHp(), Game.player.hp + heal);
+          this._floatPlayer(`+${heal}`, 'heal');
+        }
+      }else if(a.lsFlat > 0){
+        const heal = a.lsFlat;
         Game.player.hp = Math.min(playerMaxHp(), Game.player.hp + heal);
         this._floatPlayer(`+${heal}`, 'heal');
       }
     }
-    if(target.hp <= 0 && !target.dead) this._killMonster(target);
+  },
+
+  /* 宠物吸血（自己的属性），宠物用 a-like 结构 */
+  _petLifesteal(p, dmg){
+    const pst = petStatFor(p);
+    // 宠物技能里的嗜血（12% 吸血）
+    const ps = petSkillStateFor(p);
+    if(ps.ls > 0){
+      const heal = Math.floor(dmg * ps.ls);
+      if(heal > 0){
+        p.hp = Math.min(pst.hp, p.hp + heal);
+      }
+    }
   },
 
   /* ============================================================
-   *  宠物行动 —— 冲锋 + 突刺 + 返回
+   *  宠物行动
    * ============================================================ */
   async _doPetActionAnimated(p, isAuto){
     const petEl = document.getElementById('pet-' + p.uid);
@@ -640,10 +671,10 @@ const Combat = {
     const targetEl = targetM ? document.getElementById('mon-' + targetM.mid) : null;
 
     if(!isAuto && petEl && targetEl){
-      await _chargeTo(petEl, targetEl, 300);
+      await _chargeTo(petEl, targetEl, 220);
       this._doPetAction(p);
-      _returnFromCharge(petEl, 250);
-      await _sleep(270);
+      _returnFromCharge(petEl, 180);
+      await _sleep(200);
     }else{
       this._doPetAction(p);
     }
@@ -676,7 +707,7 @@ const Combat = {
         t.hp -= dmg;
         _hitMonsterAnim(t, isCrit);
         this._floatMon(t, `${p.avatar}-${dmg}`, isCrit ? 'crit' : 'normal');
-        if(ps.ls > 0){ Game.player.hp = Math.min(playerMaxHp(), Game.player.hp + Math.floor(dmg * ps.ls)); }
+        this._petLifesteal(p, dmg);
         if(ps.pois){
           const pd = Math.max(1, Math.floor(pst.atk * 0.15));
           t.hp -= pd;
@@ -692,7 +723,7 @@ const Combat = {
       target.hp -= dmg;
       _hitMonsterAnim(target, isCrit);
       this._floatMon(target, `${p.avatar}-${dmg}`, isCrit ? 'crit' : 'normal');
-      if(ps.ls > 0){ Game.player.hp = Math.min(playerMaxHp(), Game.player.hp + Math.floor(dmg * ps.ls)); }
+      this._petLifesteal(p, dmg);
       if(ps.pois){
         const pd = Math.max(1, Math.floor(pst.atk * 0.15));
         target.hp -= pd;
@@ -703,7 +734,7 @@ const Combat = {
   },
 
   /* ============================================================
-   *  怪物行动 —— 冲锋 + 突刺 + 返回
+   *  怪物行动（玩家反击在此触发）
    * ============================================================ */
   async _doMonsterActionAnimated(m, defMul, isAuto){
     const card = document.getElementById('mon-' + m.mid);
@@ -721,10 +752,10 @@ const Combat = {
     }
 
     if(!isAuto && card && targetEl){
-      await _chargeTo(card, targetEl, 300);
+      await _chargeTo(card, targetEl, 220);
       this._doMonsterAction(m, defMul, { targetIsPet, targetPet });
-      _returnFromCharge(card, 250);
-      await _sleep(270);
+      _returnFromCharge(card, 180);
+      await _sleep(200);
     }else{
       this._doMonsterAction(m, defMul, { targetIsPet, targetPet });
     }
@@ -791,6 +822,7 @@ const Combat = {
         if(m.hp <= 0 && !m.dead) this._killMonster(m);
       }
     }else{
+      // 攻击玩家
       let dmg = Math.max(1, Math.floor(atkVal - a.def * defMulFinal * 0.9));
       let isCrit = Math.random() < 0.08;
       if(isCrit) dmg = Math.floor(dmg * 1.25);
@@ -798,6 +830,7 @@ const Combat = {
       _hitPlayerAnim();
       this._floatPlayer(`-${dmg}`, isCrit ? 'crit' : 'normal');
 
+      // 反伤（宠物技能）
       let totalReflect = 0;
       getActivePetObjects().forEach(p=>{
         const ps = petSkillStateFor(p);
@@ -807,6 +840,15 @@ const Combat = {
         const rdmg = Math.max(1, Math.floor(dmg * totalReflect));
         m.hp -= rdmg;
         this._floatMon(m, `-${rdmg}`, 'reflect');
+        if(m.hp <= 0 && !m.dead) this._killMonster(m);
+      }
+
+      // 玩家反击（概率触发）
+      if(!m.dead && Math.random() < a.counter){
+        const counterDmg = Math.max(1, Math.floor(a.atk - m.def));
+        m.hp -= counterDmg;
+        _hitMonsterAnim(m, false);
+        this._floatMon(m, `[反击]-${counterDmg}`, 'normal');
         if(m.hp <= 0 && !m.dead) this._killMonster(m);
       }
     }
@@ -819,7 +861,7 @@ const Combat = {
   },
 
   /* ============================================================
-   *  击杀 / 结束
+   *  击杀（掉落宝石/碎片）
    * ============================================================ */
   _killMonster(m){
     if(m.dead) return;
@@ -855,6 +897,11 @@ const Combat = {
     }else{
       showBattleDrop(`+${gold} 金币`);
     }
+
+    // 宝石 / 碎片掉落
+    this._tryDropGemOrFrag(m);
+
+    // 精英/BOSS 掉宠物蛋
     if(m.elite && Math.random() < 0.08 && Game.pets.length < PET_WAREHOUSE_MAX){
       const tpl = pick(Object.keys(PET_TEMPLATES));
       const q = pick(['good','fine','epic']);
@@ -875,8 +922,30 @@ const Combat = {
         showBattleDrop('🌐 魔龙城已解锁！');
       }
       areaState(Game.ui.areaId).floors[Game.ui.floorIdx].bossDeath = Date.now();
+      showBattleDrop(`👑 ${m.name} 已被击杀！下一层已解锁`);
     }
     Save.auto();
+  },
+
+  /* 宝石/碎片掉落判定 */
+  _tryDropGemOrFrag(m){
+    let rate = GEM_DROP_RATE.normalMon;
+    if(m.isBoss) rate = GEM_DROP_RATE.boss;
+    else if(m.elite) rate = GEM_DROP_RATE.elite;
+    if(Math.random() >= rate) return;
+    const isGem = Math.random() < GEM_DROP_SPLIT;
+    if(isGem){
+      const boost = m.isBoss ? 0.15 : (m.elite ? 0.05 : 0);
+      const gem = dropGem(boost);
+      Game.gems.push(gem);
+      const gq = GEM_QUALITY[gem.quality];
+      showBattleDrop(`💎 掉落 ${GEMS[gem.key].name}（${gq.name}）`);
+    }else{
+      const r = dropFragment();
+      if(r){
+        showBattleDrop(`🧩 掉落 ${GEMS[r.key].name}碎片`);
+      }
+    }
   },
 
   _onGroupCleared(){
@@ -885,10 +954,7 @@ const Combat = {
     if(b.kind === 'group' && b.group){
       b.group.alive = false;
       b.group.deathTs = Date.now();
-      b.group.clearFlag = true;
     }
-    const st = areaState(Game.ui.areaId).floors[Game.ui.floorIdx];
-    if(!st.mark && st.groups.every(g=>g.clearFlag)) st.mark = true;
     Game.activePets.forEach(u=>{
       const p = Game.pets.find(x=>x.uid === u);
       if(p && petAlive(p)){ p.hp = petStatFor(p).hp; p.skillCd = {}; }

@@ -6,7 +6,15 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;overflow:hidden;}
-body{background:var(--bg);color:var(--tx);font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;max-width:720px;margin:0 auto;height:100dvh;}
+body{
+  background:#000;
+  color:var(--tx);
+  font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;position:relative;}
 
 .btn{display:block;width:100%;padding:9px;margin:3px 0;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:4px;text-align:center;transition:.12s;font-size:13px;}
@@ -36,7 +44,20 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .bar.mp>i{background:#8a8a9a;}
 .bar.exp>i{background:#777;}
 
-#app{height:100dvh;display:flex;flex-direction:column;overflow:hidden;}
+/* ============================================================
+ *  固定 480×800 容器
+ * ============================================================ */
+#app{
+  width:480px;
+  height:800px;
+  background:var(--bg);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  position:relative;
+  border:1px solid #1a1a1a;
+}
+
 .page{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
 .page.hidden{display:none;}
 
@@ -89,7 +110,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .b-field{
   flex:1;
   display:grid;
-  grid-template-columns: 84px 1fr 84px;
+  grid-template-columns: 94px 1fr 94px;
   min-height:0;
   padding:10px 4px;
   position:relative;
@@ -100,8 +121,8 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   content:'';
   position:absolute;
   top:12px; bottom:12px;
-  left:88px;
-  right:88px;
+  left:98px;
+  right:98px;
   border-left:1px dashed var(--line);
   border-right:1px dashed var(--line);
   pointer-events:none;
@@ -111,7 +132,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   grid-column:1;
   display:flex;
   flex-direction:column;
-  gap:12px;
+  gap:10px;
   align-items:center;
   padding:2px 0;
   overflow:visible;
@@ -141,7 +162,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 /* ---------- 通用方块 ---------- */
 .unit-box{
   border:1px solid var(--line2);
-  border-radius:5px;
+  border-radius:6px;
   background:var(--panel2);
   display:flex;
   flex-direction:column;
@@ -149,7 +170,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   justify-content:center;
   gap:2px;
   position:relative;
-  padding:4px 3px 12px;
+  padding:4px 3px 14px;
   transition:border-color .15s, background .15s;
   flex-shrink:0;
   will-change:transform;
@@ -160,19 +181,22 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .unit-box.elite{border-color:#666;}
 .unit-box.boss{border-color:#888;background:var(--panel3);}
 
-.unit-box.p-box{ width:64px; height:64px; padding-bottom:16px; }
-.unit-box.p-box .u-emoji{ font-size:22px; line-height:1; filter:grayscale(1); }
-.unit-box.p-box .u-lv{ font-size:9px; color:var(--tx2); line-height:1; }
+/* 玩家方块 76×76 */
+.unit-box.p-box{ width:76px; height:76px; padding-bottom:18px; }
+.unit-box.p-box .u-emoji{ font-size:28px; line-height:1; filter:grayscale(1); }
+.unit-box.p-box .u-lv{ font-size:11px; color:var(--tx2); line-height:1; }
 
-.unit-box.pet-box-single{ width:54px; height:54px; padding-bottom:12px; }
-.unit-box.pet-box-single .u-emoji{ font-size:18px; line-height:1; filter:grayscale(1); }
-.unit-box.pet-box-single .u-lv{ font-size:8px; color:var(--tx3); line-height:1; }
+/* 宠物方块 64×64 */
+.unit-box.pet-box-single{ width:64px; height:64px; padding-bottom:14px; }
+.unit-box.pet-box-single .u-emoji{ font-size:22px; line-height:1; filter:grayscale(1); }
+.unit-box.pet-box-single .u-lv{ font-size:9px; color:var(--tx3); line-height:1; }
 .unit-box.pet-box-single.down{ opacity:.4; }
 
-.unit-box.mon-unit{ width:64px; height:64px; padding-bottom:14px; }
-.unit-box.mon-unit .u-emoji{ font-size:20px; line-height:1; filter:grayscale(1); }
+/* 怪物方块 76×76 */
+.unit-box.mon-unit{ width:76px; height:76px; padding-bottom:16px; }
+.unit-box.mon-unit .u-emoji{ font-size:26px; line-height:1; filter:grayscale(1); }
 .unit-box.mon-unit .u-name{
-  font-size:9px; color:var(--tx2); line-height:1;
+  font-size:10px; color:var(--tx2); line-height:1;
   max-width:100%;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   text-align:center;
@@ -181,15 +205,15 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 /* 血条 / 蓝条 */
 .unit-box .u-bar{
   position:absolute;
-  left:3px; right:3px;
-  height:6px;
+  left:4px; right:4px;
+  height:7px;
   background:#0e0e0e;
   border-radius:2px;
   overflow:hidden;
 }
 .unit-box .u-bar>i{ display:block; height:100%; background:#ddd; transition:width .18s; }
 .unit-box .u-bar.hp{ bottom:2px; }
-.unit-box .u-bar.mp{ bottom:-5px; height:3px; }
+.unit-box .u-bar.mp{ bottom:-6px; height:3px; }
 .unit-box .u-bar.mp>i{ background:#8a8a9a; }
 .unit-box .u-bar.pet-hp>i{ background:#7a8a7a; }
 
@@ -200,7 +224,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   display:flex;
   align-items:center;
   justify-content:center;
-  font-size:8px;
+  font-size:9px;
   font-weight:700;
   color:#fff;
   text-shadow:
@@ -212,7 +236,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 }
 
 /* 底部按钮区 */
-.b-ctrl{padding:6px 8px calc(10px + env(safe-area-inset-bottom, 0px));border-top:1px solid var(--line);background:var(--panel);}
+.b-ctrl{padding:6px 8px 10px;border-top:1px solid var(--line);background:var(--panel);}
 .b-ctrl .tip{font-size:11px;color:var(--tx3);min-height:14px;margin-bottom:3px;text-align:center;}
 .b-ctrl .row{margin-bottom:3px;}
 .b-ctrl .row:last-child{margin-bottom:0;}
@@ -329,3 +353,42 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 #confirm .msg{font-size:13px;margin-bottom:12px;}
 
 .pet-mini{font-size:10px;}
+/* ============================================================
+ *  v9 新增样式：装备对比箭头 + 镶嵌页
+ * ============================================================ */
+
+/* 对比箭头：涨绿↑ 降红↓ */
+.cmp-up{
+  color: #6e6;
+  font-weight: 700;
+  margin-left: 2px;
+}
+.cmp-down{
+  color: #e66;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+/* 镶嵌页：孔位卡片更紧凑 */
+#socketBody .card{
+  align-items: center;
+}
+
+/* 宝石图标在卡片里的居中 */
+#socketBody .card .card-title{
+  text-align: center;
+}
+
+/* 主界面扩展属性行 */
+#tExt{
+  font-size: 11px;
+  color: var(--tx3);
+  letter-spacing: 0.5px;
+}
+
+/* 背包 tab 按钮 */
+#bagList > div:first-child{
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}

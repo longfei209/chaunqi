@@ -1,8 +1,14 @@
 /* ============================================================
- *  equip.js  —— 装备操作（穿/卸/卖/分解/一键最强/洗练）
+ *  equip.js  —— 装备操作 + 宝石镶嵌/取下 + 装备对比
+ *
+ *  本轮新增：
+ *   - 镶嵌宝石（3 孔）
+ *   - 取下宝石（花金币）
+ *   - 装备对比（计算属性差异）
  * ============================================================ */
 
 const Equip = {
+  /* ---------- 穿戴/卸下 ---------- */
   wear(idx){
     const e = Game.bag[idx]; if(!e) return;
     const old = Game.worn[e.slot];
@@ -22,6 +28,9 @@ const Equip = {
   },
   sell(idx){
     const e = Game.bag[idx]; if(!e) return;
+    if(e.sockets && e.sockets.some(x=>x)){
+      if(!confirm("装备上有宝石，出售会一起丢失，确定吗？")) return;
+    }
     const price = Math.floor(EQUIP_BASE[e.name].sell * (1 + QUALITY[e.quality].rate*2) * (e.affix?1.3:1));
     Game.player.gold += price;
     Game.bag.splice(idx, 1);
@@ -32,6 +41,9 @@ const Equip = {
   },
   decompose(idx){
     const e = Game.bag[idx]; if(!e) return;
+    if(e.sockets && e.sockets.some(x=>x)){
+      if(!confirm("装备上有宝石，分解会一起丢失，确定吗？")) return;
+    }
     Game.mat += DECOMP_MAT[e.quality];
     Game.bag.splice(idx, 1);
     toast("分解 +" + DECOMP_MAT[e.quality] + " 材料");
@@ -46,9 +58,11 @@ const Equip = {
       const cands = pool.filter(e=>e.slot===s);
       if(cands.length === 0){ Game.worn[s] = null; return; }
       cands.sort((a,b)=>{
-        const ta = equipStat(a), tb = equipStat(b);
-        const sa = ta.atk*1.5 + ta.def*1.2 + ta.spd*2 + ta.hp*0.3;
-        const sb = tb.atk*1.5 + tb.def*1.2 + tb.spd*2 + tb.hp*0.3;
+        const ta = equipFullBonus(a), tb = equipFullBonus(b);
+        const sa = ta.atk*1.5 + ta.def*1.2 + ta.spd*2 + ta.hp*0.3
+                 + ta.combo*8 + ta.counter*8 + ta.lsPct*8 + ta.lsFlat*2;
+        const sb = tb.atk*1.5 + tb.def*1.2 + tb.spd*2 + tb.hp*0.3
+                 + tb.combo*8 + tb.counter*8 + tb.lsPct*8 + tb.lsFlat*2;
         return sb - sa;
       });
       Game.worn[s] = cands[0];
@@ -60,6 +74,8 @@ const Equip = {
     Nav._show('worn'); Render.top();
     toast("已装备最强");
   },
+
+  /* ---------- 洗练 ---------- */
   refineRisk(e){
     let risk = 0.12 + (e.refineAtk + e.refineDef + e.refineHp) * 0.004;
     return clamp(risk, 0, 0.9);
@@ -82,5 +98,71 @@ const Equip = {
     }
     Save.auto();
     Nav._show('refine', {idx}); Render.top();
+  },
+
+  /* ============================================================
+   *  装备对比
+   *  返回一个对象，含每项属性的 newVal / oldVal / diff
+   * ============================================================ */
+  compareToWorn(eq){
+    const old = Game.worn[eq.slot];
+    const nB = equipFullBonus(eq);
+    const oB = old ? equipFullBonus(old) : { atk:0,def:0,spd:0,hp:0,combo:0,counter:0,lsPct:0,lsFlat:0,crit:0,critd:0 };
+    return {
+      atk:     { n: nB.atk,     o: oB.atk },
+      def:     { n: nB.def,     o: oB.def },
+      spd:     { n: nB.spd,     o: oB.spd },
+      hp:      { n: nB.hp,      o: oB.hp },
+      combo:   { n: nB.combo,   o: oB.combo },
+      counter: { n: nB.counter, o: oB.counter },
+      lsPct:   { n: nB.lsPct,   o: oB.lsPct },
+      lsFlat:  { n: nB.lsFlat,  o: oB.lsFlat },
+      crit:    { n: nB.crit,    o: oB.crit },
+      critd:   { n: nB.critd||0,o: oB.critd||0 }
+    };
+  },
+
+  /* ============================================================
+   *  镶嵌宝石：equipRef 可以是装备对象或 { bag: idx } 或 { worn: slot }
+   *  socketIdx: 0/1/2
+   *  gemUid: 要镶的宝石 uid
+   * ============================================================ */
+  socketGem(eq, socketIdx, gemId){
+    if(!eq || !eq.sockets) return;
+    if(socketIdx < 0 || socketIdx >= 3) return;
+    if(eq.sockets[socketIdx]) return toast("该孔已有宝石");
+    const gIdx = Game.gems.findIndex(g=>g.uid === gemId);
+    if(gIdx < 0) return;
+    const gem = Game.gems[gIdx];
+    eq.sockets[socketIdx] = { uid: gem.uid, key: gem.key, quality: gem.quality };
+    Game.gems.splice(gIdx, 1);
+    toast("镶嵌成功");
+    Save.auto();
+    Render.top();
+  },
+
+  /* 取下宝石（花金币，费用按品质） */
+  unsocketGem(eq, socketIdx){
+    if(!eq || !eq.sockets) return;
+    const g = eq.sockets[socketIdx];
+    if(!g) return;
+    const cost = GEM_REMOVE_COST[g.quality] || 200;
+    if(Game.player.gold < cost){
+      return toast(`金币不足（需 ${cost}）`);
+    }
+    Game.player.gold -= cost;
+    eq.sockets[socketIdx] = null;
+    Game.gems.push({ uid: gemUid(), key: g.key, quality: g.quality });
+    toast(`取下成功 -${cost} 金`);
+    Save.auto();
+    Render.top();
+  },
+
+  /* 找到宝石所属的装备引用（用于镶嵌页） */
+  findEquipByRef(ref){
+    if(!ref) return null;
+    if(ref.type === 'worn') return Game.worn[ref.slot];
+    if(ref.type === 'bag')  return Game.bag[ref.idx];
+    return null;
   }
 };

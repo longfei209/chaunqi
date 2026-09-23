@@ -1,5 +1,10 @@
 /* ============================================================
  *  config.js  —— 所有可调数值都在这里
+ *  本轮新增：
+ *   - 宝石配置（8 种 × 3 品质）
+ *   - 宝石碎片配置
+ *   - 特色词条池（含新属性）
+ *   - 装备孔位常量
  * ============================================================ */
 
 /* 品质 */
@@ -11,10 +16,11 @@ const QUALITY = {
 };
 const DECOMP_MAT = { normal:1, good:2, fine:4, epic:8 };
 
+/* 装备槽位 */
 const SLOT_NAME = { weapon:"武器", helmet:"帽子", cloth:"衣服", shoe:"鞋子", belt:"腰带", ring:"戒指", neck:"项链" };
 const SLOT_ORDER = ['weapon','helmet','cloth','shoe','belt','ring','neck'];
 
-/* 装备基础（atk/def × 0.6） */
+/* 装备基础（atk/def ×0.6） */
 const EQUIP_BASE = {
   "木剑":     {slot:"weapon", atk:5,  def:0,  spd:0, hp:0, buy:200,  sell:80},
   "铁剑":     {slot:"weapon", atk:10, def:1,  spd:0, hp:0, buy:600,  sell:240},
@@ -41,16 +47,25 @@ const SETS = {
   "魔龙": { name:"魔龙套", members:["魔龙斩","魔龙项链"], bonus2:{atk:20,def:15,spd:5} }
 };
 
-/* 装备词缀池 */
+/* 特色词条池（原 AFFIXES 扩展版）
+ * 一件装备最多 1 条
+ * 品质概率：优秀 5% / 精良 15% / 史诗 40%
+ */
 const AFFIXES = [
-  {k:'spd',  name:'疾风', apply:(eq,v)=>{eq.affixSpd=v;},   roll:()=>rnd(2,6),   desc:v=>`+${v}速度`},
-  {k:'crit', name:'精准', apply:(eq,v)=>{eq.affixCrit=v;},  roll:()=>rnd(3,10),  desc:v=>`+${v}%暴击`},
-  {k:'critd',name:'致命', apply:(eq,v)=>{eq.affixCritD=v;}, roll:()=>rnd(15,50), desc:v=>`+${v}%暴伤`},
-  {k:'ls',   name:'吸血', apply:(eq,v)=>{eq.affixLs=v;},    roll:()=>rnd(3,10),  desc:v=>`吸血${v}%`},
-  {k:'hp',   name:'坚韧', apply:(eq,v)=>{eq.affixHp=v;},    roll:()=>rnd(10,40), desc:v=>`+${v}HP`}
+  {k:'atk',   name:'锋利', unit:'',   roll:()=>rnd(2,6),    desc:v=>`+${v}攻击`,   type:'num'},
+  {k:'def',   name:'坚固', unit:'',   roll:()=>rnd(1,4),    desc:v=>`+${v}防御`,   type:'num'},
+  {k:'spd',   name:'疾风', unit:'',   roll:()=>rnd(2,6),    desc:v=>`+${v}速度`,   type:'num'},
+  {k:'hp',    name:'坚韧', unit:'',   roll:()=>rnd(10,40),  desc:v=>`+${v}HP`,     type:'num'},
+  {k:'crit',  name:'精准', unit:'%',  roll:()=>rnd(3,10),   desc:v=>`+${v}%暴击`,  type:'pct'},
+  {k:'critd', name:'致命', unit:'%',  roll:()=>rnd(15,50),  desc:v=>`+${v}%暴伤`,  type:'pct'},
+  {k:'combo', name:'连击', unit:'%',  roll:()=>rnd(1,3),    desc:v=>`+${v}%连击`,  type:'pct'},
+  {k:'counter',name:'反击',unit:'%',  roll:()=>rnd(1,3),    desc:v=>`+${v}%反击`,  type:'pct'},
+  {k:'lsPct', name:'吸血', unit:'%',  roll:()=>rnd(1,3),    desc:v=>`+${v}%吸血`,  type:'pct'},
+  {k:'lsFlat',name:'嗜血', unit:'',   roll:()=>rnd(1,4),    desc:v=>`+${v}固吸血`, type:'num'}
 ];
+const AFFIX_CHANCE = { normal:0, good:0.05, fine:0.15, epic:0.40 };
 
-/* 主角技能（蓝耗提升 + CD 延长） */
+/* 主角技能 */
 const SKILLS = {
   liehuo:   {name:'烈火剑法', cd:5, unlock:1, mp:15, desc:'单体 ×1.8'},
   banyue:   {name:'半月弯刀', cd:6, unlock:3, mp:28, desc:'全体 ×0.9'},
@@ -76,7 +91,6 @@ const PET_SKILLS = {
   pois:  {name:'剧毒', desc:'攻击附带剧毒',       apply:st=>{st.pois=true;}},
   refle: {name:'反伤', desc:'主人受击反12%',      apply:st=>{st.reflect=0.12;}}
 };
-
 const PET_SKILL_CD = { heal: 3, group: 2 };
 const PET_SKILL_COUNT = { normal:0, good:1, fine:2, epic:3 };
 
@@ -94,6 +108,62 @@ const MON_BEHAVIOR = {
   normal:{name:'普通'}, ranged:{name:'远程'}, tank:{name:'坦克'},
   healer:{name:'治疗'}, rage:{name:'狂暴'}, summon:{name:'召唤'}
 };
+
+/* ============================================================
+ *  宝石系统
+ * ============================================================ */
+
+/* 3 档品质 */
+const GEM_QUALITY = {
+  normal:{ k:'normal', name:'普通', cls:'q-normal', color:'#aaa' },
+  rare:  { k:'rare',   name:'稀有', cls:'q-fine',   color:'#89d' },
+  legend:{ k:'legend', name:'传说', cls:'q-epic',   color:'#ffd700' }
+};
+
+/* 宝石配置：8 种
+ * val: 三档数值 [普通, 稀有, 传说]
+ * type: num（数值型）| pct（百分比型）
+ */
+const GEMS = {
+  red:    { k:'red',    name:'红宝石', color:'#c85a5a', icon:'🔴', stat:'atk',    val:[3,6,12],   type:'num', desc:'攻击' },
+  blue:   { k:'blue',   name:'蓝宝石', color:'#5a7ac8', icon:'🔵', stat:'def',    val:[2,5,10],   type:'num', desc:'防御' },
+  green:  { k:'green',  name:'绿宝石', color:'#5ac87a', icon:'🟢', stat:'hp',     val:[15,30,60], type:'num', desc:'生命' },
+  purple: { k:'purple', name:'紫宝石', color:'#a05ac8', icon:'🟣', stat:'combo',  val:[1,2,4],    type:'pct', desc:'连击率' },
+  orange: { k:'orange', name:'橙宝石', color:'#d89a4a', icon:'🟠', stat:'counter',val:[1,2,4],    type:'pct', desc:'反击率' },
+  black:  { k:'black',  name:'黑宝石', color:'#555',    icon:'⚫', stat:'lsPct',  val:[1,2,4],    type:'pct', desc:'吸血率' },
+  yellow: { k:'yellow', name:'黄宝石', color:'#d8d84a', icon:'🟡', stat:'lsFlat', val:[2,5,10],   type:'num', desc:'固定吸血' },
+  white:  { k:'white',  name:'白宝石', color:'#e8e8e8', icon:'⚪', stat:'crit',   val:[1,2,4],    type:'pct', desc:'暴击率' }
+};
+
+/* 宝石 id 生成规则：`${gemKey}_${quality}` 例如 'red_normal' */
+const GEM_QUALITY_ORDER = ['normal','rare','legend'];
+const GEM_QUALITY_NAME = ['normal','rare','legend'];
+
+/* 商店卖普通宝石价格 */
+const GEM_SHOP_PRICE = 200;
+
+/* 取下费用 */
+const GEM_REMOVE_COST = { normal:200, rare:500, legend:1000 };
+
+/* 碎片合成：3 碎片 = 1 普通宝石（10% 出稀有） */
+const FRAG_PER_GEM = 3;
+const FRAG_UPGRADE_RARE = 0.10;
+/* 分级合成：3 普通碎片 = 1 稀有碎片；3 稀有碎片 = 1 传说碎片 */
+const FRAG_TIER_UP = 3;
+/* 碎片堆叠上限 */
+const FRAG_MAX_STACK = 999;
+
+/* 掉落概率 */
+const GEM_DROP_RATE = {
+  normalMon: 0.05,   // 普通怪 5%
+  elite: 0.10,       // 精英 10%
+  boss: 0.20         // BOSS 20%
+};
+/* 掉落时：50% 宝石 / 50% 碎片 */
+const GEM_DROP_SPLIT = 0.50;
+
+/* 装备孔位数 */
+const EQUIP_SOCKETS = 3;
 
 /* ============================================================
  *  区域配置（所有怪物 HP/ATK/DEF ×1.3 后的最终版）
@@ -224,8 +294,8 @@ const POTION_PRICE = 50;
 const POTION_MP_PRICE = 40;
 const AUTO_POTION_THRESHOLD = 0.30;
 const RAGE_MAX = 10;
-const GROUPS_PER_FLOOR = 4;
+const GROUPS_PER_FLOOR = 4;   // 保留兼容，不再使用
 const ELITE_CHANCE = 0.15;
-const PAGE_SIZE = { shop:5, bag:6, quest:4 };
+const PAGE_SIZE = { shop:5, bag:6, quest:4, gems:20 };
 const PET_WAREHOUSE_MAX = 10;
 const PET_DOWN_MS = 30*1000;

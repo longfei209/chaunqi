@@ -1,6 +1,9 @@
 /* ============================================================
  *  render.js  —— 导航 + 各页面渲染
- *  本轮调整：宠物页面显示 HP/冷却/复活倒计时
+ *
+ *  本轮改动：
+ *   - 商店分两个 tab：道具 | 宝石
+ *   - 镶嵌入口只在宝石 tab
  * ============================================================ */
 
 const Nav = {
@@ -24,6 +27,7 @@ const Nav = {
     this._show('home');
   },
   _show(pageName, opts){
+    this._lastOpts = opts || {};
     document.querySelectorAll('.page').forEach(el=>el.classList.add('hidden'));
     $('page-'+pageName).classList.remove('hidden');
     switch(pageName){
@@ -31,11 +35,12 @@ const Nav = {
       case 'area':   Render.areaPage(); break;
       case 'floor':  Render.floorPage(); break;
       case 'worn':   Render.wornPage(); break;
-      case 'bag':    Render.bagPage(opts && opts.page || 1); break;
+      case 'bag':    Render.bagPage(opts); break;
       case 'refine': Render.refinePage(opts && opts.idx); break;
-      case 'shop':   Render.shopPage(opts && opts.page || 1); break;
+      case 'shop':   Render.shopPage(opts); break;
       case 'quest':  Render.questPage(opts && opts.page || 1); break;
       case 'pet':    Render.petPage(); break;
+      case 'socket': Render.socketPage(opts); break;
       case 'battle': Combat.render(); break;
     }
   }
@@ -62,6 +67,12 @@ const Render = {
     $('tExpBar').style.width = clamp(p.exp/need,0,1)*100 + '%';
     $('tExpTxt').textContent = p.exp + '/' + need;
     $('tPet').textContent = `宠:${Game.activePets.length}/${petSlotLimit()}`;
+    const ext = $('tExt');
+    if(ext){
+      ext.textContent =
+        `连${(a.combo*100).toFixed(0)}% 反${(a.counter*100).toFixed(0)}% ` +
+        `吸${(a.lsPct*100).toFixed(0)}% 固${a.lsFlat} 暴${(a.crit*100).toFixed(0)}%`;
+    }
   },
 
   home(){
@@ -77,13 +88,21 @@ const Render = {
     if(!st.spawned) spawnFloor(ar.id, fi);
     const def = ar.floors[fi];
 
-    let html = `<div class="floor-header"><span>📍 ${ar.name} · 第${fi+1}层</span><span>印记:${st.mark?'✔':'✘'}</span></div>`;
+    const cleared = st.groups.filter(g=>!g.alive).length;
+    const total = st.groups.length;
+    const bossDead = !!st.bossDeath;
+
+    let html = `<div class="floor-header">
+      <span>📍 ${ar.name} · 第${fi+1}层</span>
+      <span>已清 ${cleared}/${total} 组</span>
+    </div>`;
 
     const aliveGroups = st.groups.map((g,gi)=>({g,gi})).filter(x=>x.g.alive);
     if(aliveGroups.length > 0){
-      html += `<div class="groups-row" id="groupsRow">`;
+      html += `<div class="groups-row" style="flex-wrap:wrap;" id="groupsRow">`;
       aliveGroups.forEach(({g, gi})=>{
-        html += `<button class="btn group-btn" onclick="Combat.startGroup(${gi})" data-gi="${gi}">第${gi+1}组</button>`;
+        const nm = g.name && g.name.length > 4 ? g.name.slice(0,4) : (g.name || '怪物');
+        html += `<button class="btn group-btn" style="flex:0 0 calc(33.33% - 4px);" onclick="Combat.startGroup(${gi})" data-gi="${gi}">${nm}</button>`;
       });
       html += `</div>`;
     } else {
@@ -91,11 +110,10 @@ const Render = {
     }
 
     const boss = def.boss;
-    const bDead = !!st.bossDeath;
-    html += `<div class="boss-block ${bDead?'dead':''}">
-      <div class="boss-name">👹 ${boss.name}</div>
+    html += `<div class="boss-block ${bossDead?'dead':''}">
+      <div class="boss-name">👹 ${boss.name} ${bossDead?'<span class="dim" style="font-size:11px;">[已击杀]</span>':''}</div>
       <div class="boss-meta">HP${fmt(boss.hp)} 攻${boss.atk} 防${boss.def} 速${boss.spd} 经${boss.exp}</div>
-      ${bDead?'<div class="dim" style="font-size:11px;">等待复活</div>':'<button class="btn primary" onclick="Combat.startBoss()">挑战 BOSS</button>'}
+      ${bossDead?'<div class="dim" style="font-size:11px;">等待复活（复活后需重新击杀才能解锁下一层）</div>':'<button class="btn primary" onclick="Combat.startBoss()">挑战 BOSS</button>'}
     </div>`;
 
     box.innerHTML = html;
@@ -126,21 +144,25 @@ const Render = {
     let html = '';
     ar.floors.forEach((f, i)=>{
       let locked = false, lockMsg = '';
-      if(i > 0 && !ast.floors[i-1].mark){
-        locked = true;
-        lockMsg = `需点亮第${i}层`;
+      if(i > 0){
+        const prev = ast.floors[i-1];
+        if(!prev.bossDeath){
+          locked = true;
+          lockMsg = `需击杀第${i}层 BOSS`;
+        }
       }
       const s = ast.floors[i];
+      const bossKilled = !!s.bossDeath;
       html += `<button class="btn ${locked?'':'primary'}" style="padding:14px;" ${locked?'disabled':''} onclick="Render._enterFloor(${i})">
-        第${i+1}层 ${s.mark?'✔':'✘'} <span class="dim" style="font-size:11px;">${locked?'🔒 '+lockMsg:'可进入'}</span>
+        第${i+1}层 ${bossKilled?'✔':'✘'} <span class="dim" style="font-size:11px;">${locked?'🔒 '+lockMsg:'可进入'}</span>
       </button>`;
     });
     $('floorBody').innerHTML = html;
   },
   _enterFloor(i){
     const ast = areaState(Game.ui.areaId);
-    if(i > 0 && !ast.floors[i-1].mark){
-      toast(`请先点亮第${i}层印记`);
+    if(i > 0 && !ast.floors[i-1].bossDeath){
+      toast(`请先击杀第${i}层 BOSS`);
       return;
     }
     if(!ast.floors[i].spawned) spawnFloor(Game.ui.areaId, i);
@@ -155,7 +177,8 @@ const Render = {
     const a = calcAttr();
     let html = `<div class="card">
       <div class="card-title">Lv.${Game.player.lv}</div>
-      <div class="card-meta">攻${a.atk} 防${a.def} 速${a.spd} | 暴击${(a.crit*100).toFixed(1)}% 暴伤${(a.critD*100).toFixed(0)}% 吸血${(a.ls*100).toFixed(0)}%</div>
+      <div class="card-meta">攻${a.atk} 防${a.def} 速${a.spd} | 暴击${(a.crit*100).toFixed(1)}% 暴伤${(a.critD*100).toFixed(0)}%</div>
+      <div class="card-meta">连击${(a.combo*100).toFixed(1)}% 反击${(a.counter*100).toFixed(1)}% 吸血${(a.lsPct*100).toFixed(1)}% 固吸${a.lsFlat}</div>
       <div class="card-meta">HP ${Math.floor(Game.player.hp)}/${playerMaxHp()} · MP ${Math.floor(Game.player.mp)}/${playerMaxMp()}</div>
       <div class="card-actions"><button class="btn" onclick="Equip.autoBest()">一键最强</button></div>
     </div>`;
@@ -163,11 +186,24 @@ const Render = {
       const e = Game.worn[s];
       if(e){
         const t = equipStat(e), q = QUALITY[e.quality];
+        const gemB = equipGemBonus(e);
         const afx = equipAffixDesc(e);
+        const socketsTxt = (e.sockets||[]).map(g=>{
+          if(!g) return '○';
+          return GEMS[g.key] ? GEMS[g.key].icon : '?';
+        }).join(' ');
         html += `<div class="card">
           <div class="card-title ${q.cls}">${e.name} <span class="dim">[${q.name}] ${SLOT_NAME[s]}</span></div>
-          <div class="card-meta">基础 攻${e.baseAtk} 防${e.baseDef} | 最终 攻${t.atk} 防${t.def} 速${t.spd} HP+${t.hp} ${afx?'· '+afx:''}</div>
-          <div class="card-actions"><button class="btn" onclick="Equip.unwear('${s}')">卸下</button></div>
+          <div class="card-meta">基础 攻${e.baseAtk} 防${e.baseDef} | 装备 ${t.atk}/${t.def} ${t.spd} HP+${t.hp}</div>
+          ${(gemB.atk+gemB.def+gemB.spd+gemB.hp+gemB.combo+gemB.counter+gemB.lsPct+gemB.lsFlat+gemB.crit) > 0
+            ? `<div class="card-meta" style="color:#9d9;">宝石：攻+${gemB.atk} 防+${gemB.def} 速+${gemB.spd} HP+${gemB.hp} 连${gemB.combo}% 反${gemB.counter}% 吸${gemB.lsPct}% 固${gemB.lsFlat} 暴${gemB.crit}%</div>`
+            : ''}
+          ${afx?`<div class="card-meta" style="color:#d8a;">词条：${afx}</div>`:''}
+          <div class="card-meta">孔位：${socketsTxt}</div>
+          <div class="card-actions">
+            <button class="btn" onclick="Nav.go('socket',{type:'worn',slot:'${s}'})">镶嵌</button>
+            <button class="btn" onclick="Equip.unwear('${s}')">卸下</button>
+          </div>
         </div>`;
       }else{
         html += `<div class="card"><div class="card-meta">${SLOT_NAME[s]}：空</div></div>`;
@@ -176,8 +212,26 @@ const Render = {
     $('wornBody').innerHTML = html;
   },
 
-  bagPage(page){
-    page = page || 1;
+  bagPage(opts){
+    opts = opts || {};
+    const tab = opts.tab || 'equip';
+    const page = opts.page || 1;
+
+    let html = `<div style="display:flex;gap:6px;margin-bottom:6px;">
+      <button class="btn ${tab==='equip'?'primary':''}" onclick="Nav._show('bag',{tab:'equip',page:1})">装备</button>
+      <button class="btn ${tab==='gem'?'primary':''}" onclick="Nav._show('bag',{tab:'gem',page:1})">宝石</button>
+    </div>`;
+
+    if(tab === 'equip'){
+      html += Render._bagEquipTab(page);
+    }else{
+      html += Render._bagGemTab(page);
+    }
+    $('bagList').innerHTML = html;
+    $('bagPager').innerHTML = '';
+  },
+
+  _bagEquipTab(page){
     const list = Game.bag;
     const total = Math.max(1, Math.ceil(list.length / PAGE_SIZE.bag));
     page = clamp(page, 1, total);
@@ -189,20 +243,39 @@ const Render = {
     }else{
       slice.forEach((e, i)=>{
         const idx = start + i;
-        const t = equipStat(e), q = QUALITY[e.quality];
-        const wornEq = Game.worn[e.slot];
-        let cmp = '';
-        if(wornEq){
-          const wt = equipStat(wornEq);
-          const dA = t.atk-wt.atk, dD = t.def-wt.def, dS = t.spd-wt.spd;
-          if(dA||dD||dS) cmp = ` (差 攻${dA>=0?'+':''}${dA} 防${dD>=0?'+':''}${dD} 速${dS>=0?'+':''}${dS})`;
-        }
+        const q = QUALITY[e.quality];
+        const t = equipStat(e);
+        const cmp = Equip.compareToWorn(e);
         const afx = equipAffixDesc(e);
+
+        const cmpLine = (label, nVal, oVal, isPct) => {
+          if(nVal === 0 && oVal === 0) return '';
+          const arrow = compareArrow(nVal, oVal, isPct);
+          return `<span style="margin-right:6px;">${label} ${isPct?nVal+'%':nVal} ${arrow}</span>`;
+        };
+        const cmpHtml = [
+          cmpLine('攻', cmp.atk.n, cmp.atk.o),
+          cmpLine('防', cmp.def.n, cmp.def.o),
+          cmpLine('速', cmp.spd.n, cmp.spd.o),
+          cmpLine('HP', cmp.hp.n, cmp.hp.o),
+          cmpLine('连', cmp.combo.n, cmp.combo.o, true),
+          cmpLine('反', cmp.counter.n, cmp.counter.o, true),
+          cmpLine('吸', cmp.lsPct.n, cmp.lsPct.o, true),
+          cmpLine('固', cmp.lsFlat.n, cmp.lsFlat.o),
+          cmpLine('暴', cmp.crit.n, cmp.crit.o, true)
+        ].filter(x=>x).join('');
+
+        const socketsTxt = (e.sockets||[]).map(g=>g?GEMS[g.key].icon:'○').join(' ');
+
         html += `<div class="card">
           <div class="card-title ${q.cls}">${e.name} <span class="dim">[${q.name}]</span></div>
-          <div class="card-meta">基础 攻${e.baseAtk} 防${e.baseDef} | 最终 攻${t.atk} 防${t.def} 速${t.spd} HP+${t.hp} 洗${e.refineTimes}/3 ${afx?'· '+afx:''}${cmp}</div>
+          <div class="card-meta">基础 攻${e.baseAtk} 防${e.baseDef} 速${e.baseSpd||0} HP${e.baseHp||0}</div>
+          <div class="card-meta" style="font-size:11px;">${cmpHtml || '<span class="dim">无对比</span>'}</div>
+          ${afx?`<div class="card-meta" style="color:#d8a;">词条：${afx}</div>`:''}
+          <div class="card-meta">孔位：${socketsTxt} · 洗练${e.refineTimes}/3</div>
           <div class="card-actions">
             <button class="btn" onclick="Equip.wear(${idx})">穿戴</button>
+            <button class="btn" onclick="Nav.go('socket',{type:'bag',idx:${idx}})">镶嵌</button>
             <button class="btn" onclick="Nav.go('refine',{idx:${idx}})">洗练</button>
             <button class="btn" onclick="Equip.sell(${idx})">出售</button>
             <button class="btn" onclick="Equip.decompose(${idx})">分解</button>
@@ -210,10 +283,186 @@ const Render = {
         </div>`;
       });
     }
-    $('bagList').innerHTML = html;
-    $('bagPager').innerHTML = total > 1
-      ? `<button ${page<=1?'disabled':''} onclick="Render.bagPage(${page-1})">◀</button><span>${page} / ${total}</span><button ${page>=total?'disabled':''} onclick="Render.bagPage(${page+1})">▶</button>`
-      : '';
+    if(total > 1){
+      html += `<div class="pager">
+        <button ${page<=1?'disabled':''} onclick="Nav._show('bag',{tab:'equip',page:${page-1}})">◀</button>
+        <span>${page} / ${total}</span>
+        <button ${page>=total?'disabled':''} onclick="Nav._show('bag',{tab:'equip',page:${page+1}})">▶</button>
+      </div>`;
+    }
+    return html;
+  },
+
+  _bagGemTab(page){
+    const order = ['red','blue','green','purple','orange','black','yellow','white'];
+    const qOrder = ['legend','rare','normal'];
+
+    const groups = {};
+    Game.gems.forEach(g=>{
+      const k = g.key + '_' + g.quality;
+      if(!groups[k]) groups[k] = { key: g.key, quality: g.quality, count: 0 };
+      groups[k].count++;
+    });
+    const fragGroups = [];
+    order.forEach(k=>{
+      const f = Game.fragments[k];
+      if(!f) return;
+      qOrder.forEach(q=>{
+        if(f[q] > 0) fragGroups.push({ key:k, quality:q, count:f[q] });
+      });
+    });
+    const gemList = Object.values(groups).sort((a,b)=>{
+      const ai = order.indexOf(a.key), bi = order.indexOf(b.key);
+      if(ai !== bi) return ai - bi;
+      return qOrder.indexOf(a.quality) - qOrder.indexOf(b.quality);
+    });
+
+    let html = `<div class="dim" style="font-size:11px;padding:0 0 4px;">宝石 ${Game.gems.length} 颗</div>`;
+
+    if(gemList.length === 0){
+      html += `<div class="card dim">暂无宝石（怪物掉落或商店购买）</div>`;
+    }else{
+      gemList.forEach(g=>{
+        const cfg = GEMS[g.key];
+        const qCfg = GEM_QUALITY[g.quality];
+        html += `<div class="card" style="padding:5px 7px;">
+          <div class="card-title" style="font-size:12px;">
+            <span style="color:${cfg.color};font-size:15px;">${cfg.icon}</span>
+            ${cfg.name}
+            <span class="dim">[${qCfg.name}]</span>
+            <span style="float:right;color:#9d9;">×${g.count}</span>
+          </div>
+          <div class="card-meta">效果：${cfg.desc} ${cfg.type==='pct'?gemValue(g.key,g.quality)+'%':'+'+gemValue(g.key,g.quality)}</div>
+        </div>`;
+      });
+    }
+
+    html += `<div class="dim" style="font-size:11px;padding:6px 0 4px;">碎片</div>`;
+    const fragHas = fragGroups.filter(f=>f.count>0);
+    if(fragHas.length === 0){
+      html += `<div class="card dim" style="font-size:11px;">暂无碎片（3 碎片可合成 1 颗普通宝石）</div>`;
+    }else{
+      fragHas.forEach(f=>{
+        const cfg = GEMS[f.key];
+        const qCfg = GEM_QUALITY[f.quality];
+        html += `<div class="card" style="padding:5px 7px;">
+          <div class="card-title" style="font-size:12px;">
+            <span style="color:${cfg.color};font-size:15px;">🧩</span>
+            ${cfg.name}碎片
+            <span class="dim">[${qCfg.name}]</span>
+            <span style="float:right;color:#9d9;">×${f.count}</span>
+          </div>
+          <div class="card-actions" style="margin-top:4px;">
+            ${f.quality==='normal'?`<button class="btn" onclick="Render._craftGem('${f.key}')">合成宝石(3)</button>`:''}
+            ${f.quality==='normal'?`<button class="btn" onclick="Render._upgradeFrag('${f.key}','normal','rare')">升级稀有(3)</button>`:''}
+            ${f.quality==='rare'?`<button class="btn" onclick="Render._upgradeFrag('${f.key}','rare','legend')">升级传说(3)</button>`:''}
+          </div>
+        </div>`;
+      });
+    }
+    return html;
+  },
+
+  _craftGem(key){
+    const g = craftGem(key);
+    if(!g) return toast("碎片不足");
+    toast(`合成成功：${GEMS[g.key].name}（${GEM_QUALITY[g.quality].name}）`);
+    Save.auto();
+    Nav._show('bag',{tab:'gem',page:1});
+    Render.top();
+  },
+  _upgradeFrag(key, fromQ, toQ){
+    const ok = upgradeFragment(key, fromQ, toQ);
+    if(!ok) return toast("碎片不足");
+    toast(`升级成功：${GEMS[key].name}碎片（${GEM_QUALITY[toQ].name}）`);
+    Save.auto();
+    Nav._show('bag',{tab:'gem',page:1});
+  },
+
+  socketPage(opts){
+    opts = opts || {};
+    const eq = Equip.findEquipByRef(opts);
+    if(!eq){
+      Nav.back();
+      return;
+    }
+    const q = QUALITY[eq.quality];
+    const sockets = eq.sockets || [null, null, null];
+
+    let html = `<div class="card">
+      <div class="card-title ${q.cls}">${eq.name} <span class="dim">[${q.name}] ${SLOT_NAME[eq.slot]}</span></div>
+      <div class="card-meta">选择孔位 → 点击下方宝石镶嵌</div>
+    </div>`;
+
+    html += `<div style="display:flex;gap:6px;margin:8px 0;">`;
+    for(let i=0;i<3;i++){
+      const g = sockets[i];
+      html += `<div class="card" style="flex:1;align-items:center;padding:8px 4px;min-height:70px;">
+        <div class="dim" style="font-size:10px;">孔 ${i+1}</div>`;
+      if(g){
+        const cfg = GEMS[g.key];
+        const qCfg = GEM_QUALITY[g.quality];
+        html += `<div style="font-size:22px;color:${cfg.color};">${cfg.icon}</div>
+          <div style="font-size:10px;">${qCfg.name}</div>
+          <button class="btn" style="margin-top:4px;padding:3px;font-size:10px;" onclick="Render._removeGem(${i})">取下</button>`;
+      }else{
+        html += `<div style="font-size:22px;color:#444;">○</div>
+          <div class="dim" style="font-size:10px;">空</div>
+          <button class="btn" style="margin-top:4px;padding:3px;font-size:10px;" onclick="Render._selectSocket(${i})" id="socketBtn${i}">选中</button>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+
+    html += `<div class="dim" style="font-size:11px;margin-top:6px;">你的宝石（点选一颗 → 自动镶到"选中"孔）</div>`;
+    if(Game.gems.length === 0){
+      html += `<div class="card dim">暂无宝石，去商店购买或打怪掉落</div>`;
+    }else{
+      const order = ['red','blue','green','purple','orange','black','yellow','white'];
+      const sorted = Game.gems.slice().sort((a,b)=>order.indexOf(a.key)-order.indexOf(b.key));
+      html += `<div style="display:flex;flex-wrap:wrap;gap:4px;">`;
+      sorted.forEach(gem=>{
+        const cfg = GEMS[gem.key];
+        const qCfg = GEM_QUALITY[gem.quality];
+        html += `<div class="card" style="flex:0 0 calc(33% - 4px);padding:5px;align-items:center;cursor:pointer;" onclick="Render._pickGem('${gem.uid}')">
+          <div style="font-size:20px;color:${cfg.color};">${cfg.icon}</div>
+          <div style="font-size:9px;">${cfg.name}</div>
+          <div style="font-size:9px;color:#888;">${qCfg.name} · ${cfg.type==='pct'?gemValue(gem.key,gem.quality)+'%':'+'+gemValue(gem.key,gem.quality)}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    html += `<div style="margin-top:8px;"><button class="btn" onclick="Nav.back()">返回</button></div>`;
+
+    $('socketBody').innerHTML = html;
+
+    this._socketSelected = (this._socketSelected != null) ? this._socketSelected : -1;
+    if(this._socketSelected >= 0){
+      const btn = $('socketBtn' + this._socketSelected);
+      if(btn){ btn.classList.add('primary'); btn.textContent = '已选'; }
+    }
+  },
+
+  _selectSocket(i){
+    this._socketSelected = i;
+    Render.socketPage(Nav._lastOpts);
+  },
+
+  _pickGem(gemId){
+    const eq = Equip.findEquipByRef(Nav._lastOpts);
+    if(!eq) return toast("装备丢失");
+    if(this._socketSelected < 0) return toast("请先选一个孔位");
+    Equip.socketGem(eq, this._socketSelected, gemId);
+    this._socketSelected = -1;
+    Render.socketPage(Nav._lastOpts);
+  },
+
+  _removeGem(socketIdx){
+    const eq = Equip.findEquipByRef(Nav._lastOpts);
+    if(!eq) return;
+    Equip.unsocketGem(eq, socketIdx);
+    Render.socketPage(Nav._lastOpts);
   },
 
   refinePage(idx){
@@ -235,8 +484,30 @@ const Render = {
     $('refineBody').innerHTML = html;
   },
 
-  shopPage(page){
-    page = page || 1;
+  /* ============================================================
+   *  商店（两个 tab：道具 | 宝石）
+   * ============================================================ */
+  shopPage(opts){
+    opts = opts || {};
+    const tab = opts.tab || 'item';
+    const page = opts.page || 1;
+
+    // tab 头
+    let html = `<div style="display:flex;gap:6px;margin-bottom:6px;">
+      <button class="btn ${tab==='item'?'primary':''}" onclick="Nav._show('shop',{tab:'item',page:1})">道具</button>
+      <button class="btn ${tab==='gem'?'primary':''}" onclick="Nav._show('shop',{tab:'gem',page:1})">宝石</button>
+    </div>`;
+
+    if(tab === 'item'){
+      html += Render._shopItemTab(page);
+    }else{
+      html += Render._shopGemTab(page);
+    }
+    $('shopList').innerHTML = html;
+    $('shopPager').innerHTML = '';
+  },
+
+  _shopItemTab(page){
     const items = [];
     items.push({label:`红药 ×1`, sub:`${POTION_PRICE}金 · 回35%HP`, action:`Shop.buyPotion(1)`});
     items.push({label:`红药 ×10`, sub:`${POTION_PRICE*10}金`, action:`Shop.buyPotion(10)`});
@@ -260,10 +531,38 @@ const Render = {
         <div class="card-actions"><button class="btn" onclick="${it.action}">购买</button></div>
       </div>`;
     });
-    $('shopList').innerHTML = html;
-    $('shopPager').innerHTML = total > 1
-      ? `<button ${page<=1?'disabled':''} onclick="Render.shopPage(${page-1})">◀</button><span>${page} / ${total}</span><button ${page>=total?'disabled':''} onclick="Render.shopPage(${page+1})">▶</button>`
-      : '';
+    if(total > 1){
+      html += `<div class="pager">
+        <button ${page<=1?'disabled':''} onclick="Nav._show('shop',{tab:'item',page:${page-1}})">◀</button>
+        <span>${page} / ${total}</span>
+        <button ${page>=total?'disabled':''} onclick="Nav._show('shop',{tab:'item',page:${page+1}})">▶</button>
+      </div>`;
+    }
+    return html;
+  },
+
+  _shopGemTab(page){
+    const order = ['red','blue','green','purple','orange','black','yellow','white'];
+    let html = `<div class="card">
+      <div class="card-title">💎 宝石镶嵌</div>
+      <div class="card-meta">打开镶嵌界面，把宝石镶到装备上</div>
+      <div class="card-actions"><button class="btn primary" onclick="Shop.openSocketPage()">打开镶嵌</button></div>
+    </div>`;
+
+    html += `<div class="dim" style="font-size:11px;padding:6px 0 4px;">普通宝石 · ${GEM_SHOP_PRICE}金/颗</div>`;
+    order.forEach(k=>{
+      const g = GEMS[k];
+      html += `<div class="card" style="padding:6px 8px;">
+        <div class="card-title" style="font-size:12px;">
+          <span style="color:${g.color};font-size:16px;">${g.icon}</span>
+          ${g.name}
+          <span class="dim">[普通]</span>
+        </div>
+        <div class="card-meta">${g.desc} +${g.val[0]}${g.type==='pct'?'%':''} · ${GEM_SHOP_PRICE}金</div>
+        <div class="card-actions"><button class="btn" onclick="Shop.buyGem('${k}')">购买</button></div>
+      </div>`;
+    });
+    return html;
   },
 
   questPage(page){
@@ -302,7 +601,7 @@ const Render = {
     });
     $('questList').innerHTML = html;
     $('questPager').innerHTML = total > 1
-      ? `<button ${page<=1?'disabled':''} onclick="Render.questPage(${page-1})">◀</button><span>${page} / ${total}</span><button ${page>=total?'disabled':''} onclick="Render.questPage(${page+1})">▶</button>`
+      ? `<button ${page<=1?'disabled':''} onclick="Nav._show('quest',{page:${page-1}})">◀</button><span>${page} / ${total}</span><button ${page>=total?'disabled':''} onclick="Nav._show('quest',{page:${page+1}})">▶</button>`
       : '';
   },
 
@@ -352,3 +651,8 @@ const Render = {
     $('petBody').innerHTML = html;
   }
 };
+
+setInterval(()=>{
+  if(!$('page-home').classList.contains('hidden')) Render.top();
+  if(Game.battle) Combat.render();
+}, 1500);

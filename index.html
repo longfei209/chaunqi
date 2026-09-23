@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
-<title>传奇 · 黑白 · v8</title>
+<title>传奇 · 黑白 · v9</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
 <div id="app">
 
+  <!-- ============ 主页 ============ -->
   <div class="page" id="page-home">
     <div class="hud">
       <div class="hud-row">
@@ -26,6 +27,9 @@
         <span>防 <b id="tDef">0</b></span>
         <span>速 <b id="tSpd">0</b></span>
         <span id="tPet" class="pet-mini dim">宠:0/1</span>
+      </div>
+      <div class="hud-row" style="justify-content:flex-start;">
+        <span class="dim" id="tExt" style="font-size:11px;">连0% 反0% 吸0% 固0 暴0%</span>
       </div>
     </div>
     <div class="home-body">
@@ -44,6 +48,7 @@
     </div>
   </div>
 
+  <!-- ============ 地图选择 ============ -->
   <div class="page hidden" id="page-area">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -53,6 +58,7 @@
     <div class="page-body scrollable" id="areaBody"></div>
   </div>
 
+  <!-- ============ 楼层选择 ============ -->
   <div class="page hidden" id="page-floor">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -62,6 +68,7 @@
     <div class="page-body scrollable" id="floorBody"></div>
   </div>
 
+  <!-- ============ 穿戴 ============ -->
   <div class="page hidden" id="page-worn">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -71,18 +78,20 @@
     <div class="page-body scrollable" id="wornBody"></div>
   </div>
 
+  <!-- ============ 背包 ============ -->
   <div class="page hidden" id="page-bag">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
       <span class="title">背包</span>
       <button class="nav-home" onclick="Nav.home()">⌂</button>
     </div>
-    <div class="page-body" style="display:flex;flex-direction:column;min-height:0;">
+    <div class="page-body" id="bagBody" style="display:flex;flex-direction:column;min-height:0;">
       <div class="cards-list" id="bagList"></div>
       <div class="pager" id="bagPager"></div>
     </div>
   </div>
 
+  <!-- ============ 洗练 ============ -->
   <div class="page hidden" id="page-refine">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -92,30 +101,43 @@
     <div class="page-body scrollable" id="refineBody"></div>
   </div>
 
+  <!-- ============ 镶嵌 ============ -->
+  <div class="page hidden" id="page-socket">
+    <div class="page-header">
+      <button class="nav-back" onclick="Nav.back()">← 返回</button>
+      <span class="title">镶嵌宝石</span>
+      <button class="nav-home" onclick="Nav.home()">⌂</button>
+    </div>
+    <div class="page-body scrollable" id="socketBody"></div>
+  </div>
+
+  <!-- ============ 商店 ============ -->
   <div class="page hidden" id="page-shop">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
       <span class="title">商店</span>
       <button class="nav-home" onclick="Nav.home()">⌂</button>
     </div>
-    <div class="page-body" style="display:flex;flex-direction:column;min-height:0;">
+    <div class="page-body" id="shopBody" style="display:flex;flex-direction:column;min-height:0;">
       <div class="cards-list" id="shopList"></div>
       <div class="pager" id="shopPager"></div>
     </div>
   </div>
 
+  <!-- ============ 任务 ============ -->
   <div class="page hidden" id="page-quest">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
       <span class="title">任务</span>
       <button class="nav-home" onclick="Nav.home()">⌂</button>
     </div>
-    <div class="page-body" style="display:flex;flex-direction:column;min-height:0;">
+    <div class="page-body" id="questBody" style="display:flex;flex-direction:column;min-height:0;">
       <div class="cards-list" id="questList"></div>
       <div class="pager" id="questPager"></div>
     </div>
   </div>
 
+  <!-- ============ 宠物 ============ -->
   <div class="page hidden" id="page-pet">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -125,6 +147,7 @@
     <div class="page-body scrollable" id="petBody"></div>
   </div>
 
+  <!-- ============ 战斗 ============ -->
   <div class="page hidden" id="page-battle">
     <div class="page-header" style="position:relative;">
       <button class="nav-back" onclick="Combat.quit()">← 退出</button>
