@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+<title>传奇 · 黑白 · v8</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <div class="page" id="page-home">
+    <div class="hud">
+      <div class="hud-row">
+        <span>Lv.<b id="tLv">1</b> · 金 <b id="tGold">0</b></span>
+        <span class="dim">红<b id="tPotion">0</b> 蓝<b id="tPotionMp">0</b> 材<b id="tMat">0</b> 怒<b id="tRage">0</b>/10</span>
+      </div>
+      <div class="hud-row bars">
+        <div class="bar"><i id="tHpBar"></i><div class="txt" id="tHpTxt">0/0</div></div>
+        <div class="bar mp"><i id="tMpBar"></i><div class="txt" id="tMpTxt">0/0</div></div>
+        <div class="bar exp"><i id="tExpBar"></i><div class="txt" id="tExpTxt">0/0</div></div>
+      </div>
+      <div class="hud-row stats">
+        <span>攻 <b id="tAtk">0</b></span>
+        <span>防 <b id="tDef">0</b></span>
+        <span>速 <b id="tSpd">0</b></span>
+        <span id="tPet" class="pet-mini dim">宠:0/1</span>
+      </div>
+    </div>
+    <div class="home-body">
+      <div class="menu-grid">
+        <button class="btn sm" onclick="Nav.go('area')">地图</button>
+        <button class="btn sm" onclick="Nav.go('worn')">人物</button>
+        <button class="btn sm" onclick="Nav.go('bag')">背包</button>
+        <button class="btn sm" onclick="Nav.go('shop')">商店</button>
+        <button class="btn sm" onclick="Nav.go('quest')">任务</button>
+        <button class="btn sm" onclick="Nav.go('pet')">宠物</button>
+        <button class="btn sm" onclick="Save.manual()">存档</button>
+        <button class="btn sm" onclick="Save.load()">读档</button>
+        <button class="btn sm ghost" onclick="Save.reset()">重置</button>
+      </div>
+      <div id="homeMain" style="flex:1;display:flex;flex-direction:column;gap:5px;min-height:0;"></div>
+    </div>
+  </div>
+
+  <div class="page hidden" id="page-area">
+    <div class="page-header">
+      <button class="nav-back" onclick="Nav.back()">← 返回</button>
+      <span class="title">选择区域</span>
+      <button class="nav-home" onclick="Nav.home()">⌂</button>
+    </div>
+    <div class="page-body scrollable" id="areaBody"></div>
+  </div>
+
+  <div class="page hidden" id="page-floor">
+    <div class="page-header">
+      <button class="nav-back" onclick="Nav.back()">← 返回</button>
+      <span class="title" id="floorTitle">楼层</span>
+      <button class="nav-home" onclick="Nav.home()">⌂</button>
+    </div>
+    <div class="page-body scrollable" id="floorBody"></div>
+  </div>
+
+  <div class="page hidden" id="page-worn">
+    <div class="page-header">
+      <button class="nav-back" onclick="Nav.back()">← 返回</button>
+      <span class="title">人物</span>
+      <button class="nav-home" onclick="Nav.home()">⌂</button>
+    </div>
+    <div class="page-body scrollable" id="wornBody"></div>
+  </div>
+
+  <div class="page hidden" id="page-bag">
+    <div class="page-header">
+      <button class="nav-back" onclick="Nav.back()">← 返回</button>
+      <span class="title">背包</span>
+      <button class="nav-home" onclick="Nav.home()">⌂</button>
+    </div>
+    <div class="page-body" style="display:flex;flex-direction:column;min-height:0;">
+      <div class="cards-list" id="bagList"></div>
+      <div class="pager" id="bagPager"></div>
+    </div>
+  </div>
+
+  <div class="page hidden" id="page-refine">
+    <div class="page-header">
+      <button class="nav-back" onclick="Nav.back()">← 返回</button>
+      <span class="title">洗练</span>
+      <button class="nav-home" onclick="Nav.home()">⌂</button>
+    </div>
+    <div class="page-body scrollable" id="refineBody"></div>
+  </div>
+
+  <div class="page hidden" id="page-shop">
+    <div class="page-header">
+      <button class="nav-back" onclick="Nav.back()">← 返回</button>
+      <span class="title">商店</span>
+      <button class="nav-home" onclick="Nav.home()">⌂</button>
+    </div>
+    <div class="page-body" style="display:flex;flex-direction:column;min-height:0;">
+      <div class="cards-list" id="shopList"></div>
+      <div class="pager" id="shopPager"></div>
+    </div>
+  </div>
+
+  <div class="page hidden" id="page-quest">
+    <div class="page-header">
+      <button class="nav-back" onclick="Nav.back()">← 返回</button>
+      <span class="title">任务</span>
+      <button class="nav-home" onclick="Nav.home()">⌂</button>
+    </div>
+    <div class="page-body" style="display:flex;flex-direction:column;min-height:0;">
+      <div class="cards-list" id="questList"></div>
+      <div class="pager" id="questPager"></div>
+    </div>
+  </div>
+
+  <div class="page hidden" id="page-pet">
+    <div class="page-header">
+      <button class="nav-back" onclick="Nav.back()">← 返回</button>
+      <span class="title">宠物</span>
+      <button class="nav-home" onclick="Nav.home()">⌂</button>
+    </div>
+    <div class="page-body scrollable" id="petBody"></div>
+  </div>
+
+  <div class="page hidden" id="page-battle">
+    <div class="page-header" style="position:relative;">
+      <button class="nav-back" onclick="Combat.quit()">← 退出</button>
+      <span class="title" id="bLoc">战斗</span>
+      <button class="nav-home" onclick="Combat.quit()">⌂</button>
+      <div class="b-drop" id="bDrop"></div>
+    </div>
+    <div class="b-field">
+      <div class="b-left" id="bLeft"></div>
+      <div class="b-right">
+        <div class="b-grid" id="bGrid"></div>
+      </div>
+    </div>
+    <div class="b-ctrl">
+      <div class="tip" id="bTip"></div>
+      <div class="row">
+        <button class="btn primary" onclick="Combat.attack()"><span class="kbd-tag">1</span>攻击</button>
+        <button class="btn" id="bSkill1" onclick="Combat.useSkill('liehuo')"><span class="kbd-tag">Q</span>烈火</button>
+        <button class="btn" id="bSkill2" onclick="Combat.useSkill('banyue')"><span class="kbd-tag">W</span>半月</button>
+        <button class="btn" id="bSkill3" onclick="Combat.useSkill('zhiyu')"><span class="kbd-tag">E</span>治愈</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="bSkill4" onclick="Combat.useSkill('zhanshen')"><span class="kbd-tag">R</span>战神</button>
+        <button class="btn warn" id="bRageBtn" onclick="Combat.useRage()"><span class="kbd-tag">空格</span>怒斩</button>
+        <button class="btn" onclick="Combat.potion()"><span class="kbd-tag">Z</span>红药</button>
+        <button class="btn" onclick="Combat.potionMp()"><span class="kbd-tag">X</span>蓝药</button>
+        <button class="btn" id="bAutoBtn" onclick="Combat.toggleAuto()"><span class="kbd-tag">Tab</span>自动</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+<div id="confirm" class="hidden"><div class="box"><div class="msg" id="cfmMsg"></div><div class="row"><button class="btn ghost" id="cfmNo">取消</button><button class="btn primary" id="cfmYes">确定</button></div></div></div>
+
+<!-- 模块加载顺序（不要改） -->
+<script src="js/config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/state.js"></script>
+<script src="js/pet.js"></script>
+<script src="js/equip.js"></script>
+<script src="js/shop.js"></script>
+<script src="js/quest.js"></script>
+<script src="js/events.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/render.js"></script>
+<script src="js/hotkeys.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
