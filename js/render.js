@@ -1,8 +1,8 @@
 /* ============================================================
  *  render.js  —— 导航 + 各页面渲染
+ *  本轮调整：宠物页面显示 HP/冷却/复活倒计时
  * ============================================================ */
 
-/* 导航栈 */
 const Nav = {
   stack: ['home'],
   go(pageName, opts){
@@ -317,22 +317,33 @@ const Render = {
         const q = QUALITY[p.quality];
         const st = petStatFor(p);
         const isActive = Game.activePets.includes(p.uid);
+        const alive = petAlive(p);
+        const maxHp = st.hp;
+        const hpPct = clamp(p.hp/maxHp, 0, 1) * 100;
         const skills = p.skills && p.skills.length
           ? p.skills.map(k=>PET_SKILLS[k].name).join(' / ')
           : '无';
         const skillDesc = p.skills && p.skills.length
-          ? p.skills.map(k=>`<div class="dim" style="font-size:10px;">· ${PET_SKILLS[k].name}：${PET_SKILLS[k].desc}</div>`).join('')
+          ? p.skills.map(k=>{
+              const sk = PET_SKILLS[k];
+              const cdTxt = PET_SKILL_CD[k] ? `（CD ${PET_SKILL_CD[k]} 回合）` : '（被动）';
+              return `<div class="dim" style="font-size:10px;">· ${sk.name}：${sk.desc}${cdTxt}</div>`;
+            }).join('')
           : '';
+        const statusTxt = !alive
+          ? `<span style="color:#c88;font-size:10px;">[复活中 ${Math.ceil((p.downUntil - Date.now())/1000)}s]</span>`
+          : (isActive ? `<span style="color:#8f8;font-size:10px;">[已上阵]</span>` : '');
         html += `<div class="card">
-          <div class="card-title">${p.avatar} <span class="${q.cls}">${p.name}</span> <span class="dim">[${q.name}] Lv.${p.lv}</span>${isActive?' <span style="color:#8f8;font-size:10px;">[已上阵]</span>':''}</div>
-          <div class="card-meta">攻${st.atk} 防${st.def} HP${st.hp} 速${st.spd} | 被动 攻+${st.pAtk} 防+${st.pDef} 速+${st.pSpd}</div>
+          <div class="card-title">${p.avatar} <span class="${q.cls}">${p.name}</span> <span class="dim">[${q.name}] Lv.${p.lv}</span> ${statusTxt}</div>
+          <div class="card-meta">HP ${Math.floor(p.hp)}/${maxHp} · 攻${st.atk} 防${st.def} 速${st.spd} | 被动 攻+${st.pAtk} 防+${st.pDef} 速+${st.pSpd}</div>
+          <div class="bar" style="height:8px;margin-bottom:4px;"><i style="width:${hpPct}%;background:#7a8a7a;"></i></div>
           <div class="card-meta">技能(${p.skills.length}): ${skills}</div>
           ${skillDesc}
           <div class="card-meta">经验 ${p.exp}/${p.lv*150}</div>
           <div class="card-actions">
             ${isActive
               ? `<button class="btn ghost" onclick="Pet.toggle('${p.uid}')">下阵</button>`
-              : `<button class="btn" onclick="Pet.toggle('${p.uid}')" ${activeCount>=limit?'disabled':''}>${activeCount>=limit?'已满':'上阵'}</button>`}
+              : `<button class="btn" onclick="Pet.toggle('${p.uid}')" ${activeCount>=limit || !alive ?'disabled':''}>${!alive?'复活中':(activeCount>=limit?'已满':'上阵')}</button>`}
             <button class="btn danger" onclick="Pet.release('${p.uid}')">放生</button>
           </div>
         </div>`;
