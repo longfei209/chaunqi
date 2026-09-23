@@ -133,6 +133,22 @@ function equipGemBonus(eq){
   return bonus;
 }
 
+/* 兼容 equip.js 里旧的 compareToWorn 调用（返回单值，取 max） */
+function equipFullBonus(eq){
+  const r = equipFullRange(eq);
+  return {
+    atk: r.atkMax,
+    def: r.defMax,
+    spd: r.spd,
+    hp:  r.hp,
+    combo: r.combo,
+    counter: r.counter,
+    lsPct: r.lsPct,
+    lsFlat: r.lsFlat,
+    crit: r.crit,
+    critd: 0
+  };
+}
 /* ---- 装备最终区间（基础 + 宝石） ----
  * 宝石攻击只加到 max
  */
