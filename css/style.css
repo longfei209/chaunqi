@@ -86,7 +86,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 
 .b-field{flex:1;display:flex;min-height:0;}
 .b-left{width:35%;padding:6px 5px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px;align-items:center;background:var(--panel);position:relative;overflow:hidden;}
-.b-left .p-avatar{font-size:26px;filter:grayscale(1);line-height:1;}
+.b-left .p-avatar{font-size:26px;filter:grayscale(1);line-height:1;transition:transform .1s;}
 .b-left .p-name{font-size:11px;color:var(--tx2);}
 .b-left .bar{width:100%;height:11px;}
 .b-left .p-stats{font-size:10px;color:var(--tx3);text-align:center;line-height:1.4;}
@@ -94,7 +94,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .b-left .buff-tag{font-size:10px;color:#e0e0e0;border:1px solid #666;border-radius:3px;padding:1px 4px;}
 .b-left .rage-line{font-size:10px;color:var(--tx3);}
 .b-left .pet-box{width:100%;display:flex;flex-direction:column;gap:3px;margin-top:2px;}
-.b-left .pet-item{display:flex;align-items:center;gap:3px;font-size:9px;}
+.b-left .pet-item{display:flex;align-items:center;gap:3px;font-size:9px;border-radius:3px;padding:1px 2px;transition:transform .1s;}
 .b-left .pet-item .pa{font-size:11px;}
 .b-left .pet-item .pb{flex:1;height:7px;background:#0e0e0e;border:1px solid var(--line2);border-radius:2px;overflow:hidden;}
 .b-left .pet-item .pb>i{display:block;height:100%;background:#7a8a7a;}
@@ -102,7 +102,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .b-right{width:65%;padding:6px;overflow:hidden;display:flex;flex-direction:column;}
 .b-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;flex:1;min-height:0;align-content:start;}
 
-.mon-unit{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:4px 5px;cursor:pointer;transition:.1s;display:flex;flex-direction:column;height:60px;overflow:hidden;}
+.mon-unit{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:4px 5px;cursor:pointer;transition:background .1s;display:flex;flex-direction:column;height:60px;overflow:hidden;position:relative;}
 .mon-unit:active{background:#2a2a2a;}
 .mon-unit.dead{opacity:.25;pointer-events:none;}
 .mon-unit.elite{border-color:#666;}
@@ -121,6 +121,9 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .b-drop{position:absolute;top:38px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid #555;border-radius:20px;padding:5px 14px;font-size:12px;color:#fff;opacity:0;pointer-events:none;transition:.3s;z-index:130;white-space:nowrap;max-width:90%;overflow:hidden;text-overflow:ellipsis;}
 .b-drop.on{opacity:1;}
 
+/* ============================================================
+ *  飘字（向上飘 + 淡出）
+ * ============================================================ */
 .float-text{position:fixed;transform:translate(-50%,-50%);font-weight:700;font-size:17px;pointer-events:none;z-index:500;animation:floatUp 1.05s ease-out forwards;text-shadow:0 1px 3px #000,0 0 6px rgba(0,0,0,.8);white-space:nowrap;}
 @keyframes floatUp{
   0%{opacity:0;transform:translate(-50%,-50%) scale(.7);}
@@ -129,6 +132,142 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   100%{opacity:0;transform:translate(-50%,-180%) scale(.9);}
 }
 
+/* ============================================================
+ *  攻击动作（谁攻击谁动）
+ * ============================================================ */
+
+/* 玩家攻击前冲（手动，350ms） */
+@keyframes playerAttack {
+  0%   { transform: translateX(0); }
+  43%  { transform: translateX(8px); }
+  100% { transform: translateX(0); }
+}
+.anim-player-attack { animation: playerAttack 350ms ease-out; }
+
+/* 宠物攻击前冲（手动，150ms） */
+@keyframes petAttack {
+  0%   { transform: translateX(0); }
+  40%  { transform: translateX(6px); }
+  100% { transform: translateX(0); }
+}
+.anim-pet-attack { animation: petAttack 150ms ease-out; }
+
+/* 怪物攻击前冲（向左，150ms） */
+@keyframes monAttack {
+  0%   { transform: translateX(0); }
+  40%  { transform: translateX(-6px); }
+  100% { transform: translateX(0); }
+}
+.anim-mon-attack { animation: monAttack 150ms ease-out; }
+
+/* ============================================================
+ *  命中反馈
+ * ============================================================ */
+
+/* 抖动 */
+@keyframes hitShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+.anim-hit-shake { animation: hitShake 400ms ease-out; }
+
+/* 闪白（普通命中） */
+@keyframes hitFlash {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(2.2); }
+}
+.anim-hit-flash { animation: hitFlash 200ms ease-out; }
+
+/* 暴击闪白（更强） */
+@keyframes hitCrit {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(3); }
+}
+.anim-hit-crit { animation: hitCrit 300ms ease-out; }
+
+/* 玩家被击中 */
+@keyframes playerHit {
+  0%, 100% { transform: translateX(0); }
+  30% { transform: translateX(-5px); }
+  60% { transform: translateX(4px); }
+}
+.anim-player-hit { animation: playerHit 300ms ease-out; }
+
+/* 玩家被治疗（绿光） */
+@keyframes healGlow {
+  0%, 100% { box-shadow: 0 0 0 rgba(80,200,80,0); }
+  50%      { box-shadow: 0 0 14px 4px rgba(80,200,80,0.55); }
+}
+.anim-heal-glow { animation: healGlow 600ms ease-out; }
+
+/* 玩家 buff（金光） */
+@keyframes buffGlow {
+  0%, 100% { box-shadow: 0 0 0 rgba(220,200,80,0); }
+  50%      { box-shadow: 0 0 18px 6px rgba(220,200,80,0.65); }
+}
+.anim-buff-glow { animation: buffGlow 700ms ease-out; }
+
+/* 烈火：目标红色边框脉冲 */
+@keyframes firePulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(220,60,60,0); }
+  50%      { box-shadow: 0 0 0 5px rgba(220,60,60,0.65), inset 0 0 20px rgba(220,60,60,0.4); }
+}
+.anim-fire-pulse { animation: firePulse 500ms ease-out; }
+
+/* 怒斩：目标紫色闪光 + 放大 */
+@keyframes rageHit {
+  0%, 100% { box-shadow: 0 0 0 rgba(180,120,220,0); transform: scale(1); }
+  30%      { box-shadow: 0 0 0 7px rgba(180,120,220,0.75); transform: scale(1.05); }
+  60%      { box-shadow: 0 0 0 4px rgba(180,120,220,0.4); transform: scale(0.98); }
+}
+.anim-rage-hit { animation: rageHit 500ms ease-out; }
+
+/* ============================================================
+ *  技能特效
+ * ============================================================ */
+
+/* Emoji 飘出 */
+.skill-emoji{
+  position:fixed;
+  transform:translate(-50%,-50%);
+  font-size:34px;
+  line-height:1;
+  pointer-events:none;
+  z-index:600;
+  animation:skillEmoji 900ms ease-out forwards;
+  filter:drop-shadow(0 0 6px rgba(255,255,255,0.75));
+}
+@keyframes skillEmoji{
+  0%   { opacity:0; transform:translate(-50%,-50%) scale(0.4); }
+  20%  { opacity:1; transform:translate(-50%,-110%) scale(1.45); }
+  60%  { opacity:1; transform:translate(-50%,-150%) scale(1.1); }
+  100% { opacity:0; transform:translate(-50%,-220%) scale(0.9); }
+}
+
+/* 全屏白色横扫（半月弯刀） */
+.skill-sweep{
+  position:fixed;
+  top:0;
+  left:-120%;
+  width:60%;
+  height:100vh;
+  background:linear-gradient(to right, transparent, rgba(255,255,255,0.55), transparent);
+  pointer-events:none;
+  z-index:550;
+  animation:sweep 500ms ease-out forwards;
+}
+@keyframes sweep{
+  0%   { left:-120%; opacity:0; }
+  30%  { opacity:1; }
+  100% { left:120%;  opacity:0; }
+}
+
+/* ============================================================
+ *  Toast / Confirm
+ * ============================================================ */
 #toast{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:#222;color:#eee;border:1px solid #444;padding:7px 14px;border-radius:20px;font-size:12px;z-index:300;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center;}
 #toast.on{opacity:1;}
 #confirm{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:20px;}
