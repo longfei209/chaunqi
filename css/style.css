@@ -83,7 +83,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .cards-list{display:flex;flex-direction:column;gap:5px;flex:1;min-height:0;}
 
 /* ============================================================
- *  战斗界面 —— 三栏布局：左玩家/宠物 · 中战场 · 右怪物
+ *  战斗界面 —— 三栏布局
  * ============================================================ */
 
 .b-field{
@@ -96,7 +96,6 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   overflow:hidden;
 }
 
-/* 中间战场虚线分隔 */
 .b-field::before{
   content:'';
   position:absolute;
@@ -108,7 +107,6 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   pointer-events:none;
 }
 
-/* 左栏：玩家 + 宠物 */
 .b-left{
   grid-column:1;
   display:flex;
@@ -121,7 +119,6 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   z-index:2;
 }
 
-/* 右栏：怪物队列 */
 .b-right{
   grid-column:3;
   display:flex;
@@ -152,7 +149,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   justify-content:center;
   gap:2px;
   position:relative;
-  padding:4px 3px 10px;
+  padding:4px 3px 12px;
   transition:border-color .15s, background .15s;
   flex-shrink:0;
   will-change:transform;
@@ -163,19 +160,16 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .unit-box.elite{border-color:#666;}
 .unit-box.boss{border-color:#888;background:var(--panel3);}
 
-/* 玩家方块 64×64 */
-.unit-box.p-box{ width:64px; height:64px; padding-bottom:14px; }
+.unit-box.p-box{ width:64px; height:64px; padding-bottom:16px; }
 .unit-box.p-box .u-emoji{ font-size:22px; line-height:1; filter:grayscale(1); }
 .unit-box.p-box .u-lv{ font-size:9px; color:var(--tx2); line-height:1; }
 
-/* 宠物方块 54×54 */
-.unit-box.pet-box-single{ width:54px; height:54px; padding-bottom:10px; }
+.unit-box.pet-box-single{ width:54px; height:54px; padding-bottom:12px; }
 .unit-box.pet-box-single .u-emoji{ font-size:18px; line-height:1; filter:grayscale(1); }
 .unit-box.pet-box-single .u-lv{ font-size:8px; color:var(--tx3); line-height:1; }
 .unit-box.pet-box-single.down{ opacity:.4; }
 
-/* 怪物方块 64×64 */
-.unit-box.mon-unit{ width:64px; height:64px; padding-bottom:12px; }
+.unit-box.mon-unit{ width:64px; height:64px; padding-bottom:14px; }
 .unit-box.mon-unit .u-emoji{ font-size:20px; line-height:1; filter:grayscale(1); }
 .unit-box.mon-unit .u-name{
   font-size:9px; color:var(--tx2); line-height:1;
@@ -184,20 +178,38 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   text-align:center;
 }
 
-/* 血条 / 蓝条（贴底） */
+/* 血条 / 蓝条 */
 .unit-box .u-bar{
   position:absolute;
   left:3px; right:3px;
-  height:4px;
+  height:6px;
   background:#0e0e0e;
   border-radius:2px;
   overflow:hidden;
 }
 .unit-box .u-bar>i{ display:block; height:100%; background:#ddd; transition:width .18s; }
 .unit-box .u-bar.hp{ bottom:2px; }
-.unit-box .u-bar.mp{ bottom:-6px; height:3px; background:transparent; }
+.unit-box .u-bar.mp{ bottom:-5px; height:3px; }
 .unit-box .u-bar.mp>i{ background:#8a8a9a; }
 .unit-box .u-bar.pet-hp>i{ background:#7a8a7a; }
+
+/* 血条数字 */
+.unit-box .u-num{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:8px;
+  font-weight:700;
+  color:#fff;
+  text-shadow:
+    0 0 2px #000, 0 0 2px #000, 0 0 2px #000,
+    1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+  pointer-events:none;
+  line-height:1;
+  letter-spacing:-0.3px;
+}
 
 /* 底部按钮区 */
 .b-ctrl{padding:6px 8px calc(10px + env(safe-area-inset-bottom, 0px));border-top:1px solid var(--line);background:var(--panel);}
@@ -206,7 +218,6 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .b-ctrl .row:last-child{margin-bottom:0;}
 .b-ctrl .btn{margin:0;padding:6px 4px;font-size:12px;}
 
-/* 掉落提示 */
 .b-drop{position:absolute;top:38px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid #555;border-radius:20px;padding:5px 14px;font-size:12px;color:#fff;opacity:0;pointer-events:none;transition:.3s;z-index:130;white-space:nowrap;max-width:90%;overflow:hidden;text-overflow:ellipsis;}
 .b-drop.on{opacity:1;}
 
