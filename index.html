@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
-<title>传奇 · 黑白 · v10</title>
+<title>传奇 · 黑白 · v11</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
 <div id="app">
 
-  <!-- ============ 主页 ============ -->
+  <!-- 主页 -->
   <div class="page" id="page-home">
     <div class="hud">
       <div class="hud-row">
@@ -18,11 +18,7 @@
       </div>
       <div class="hud-row bars">
         <div class="bar"><i id="tHpBar"></i><div class="txt" id="tHpTxt">0/0</div></div>
-      </div>
-      <div class="hud-row bars">
         <div class="bar mp"><i id="tMpBar"></i><div class="txt" id="tMpTxt">0/0</div></div>
-      </div>
-      <div class="hud-row bars">
         <div class="bar exp"><i id="tExpBar"></i><div class="txt" id="tExpTxt">0/0</div></div>
       </div>
     </div>
@@ -34,15 +30,16 @@
         <button class="btn sm" onclick="Nav.go('shop')">商店</button>
         <button class="btn sm" onclick="Nav.go('quest')">任务</button>
         <button class="btn sm" onclick="Nav.go('pet')">宠物</button>
-        <button class="btn sm" onclick="Save.manual()">存档</button>
-        <button class="btn sm" onclick="Save.load()">读档</button>
+        <button class="btn sm" onclick="Nav.go('skill')">技能</button>
+        <button class="btn sm" onclick="Nav.go('save')">存档</button>
+        <button class="btn sm" onclick="Nav.go('load')">读档</button>
         <button class="btn sm ghost" onclick="Save.reset()">重置</button>
       </div>
       <div id="homeMain" style="flex:1;display:flex;flex-direction:column;gap:5px;min-height:0;"></div>
     </div>
   </div>
 
-  <!-- ============ 地图选择 ============ -->
+  <!-- 地图选择 -->
   <div class="page hidden" id="page-area">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -52,7 +49,7 @@
     <div class="page-body scrollable" id="areaBody"></div>
   </div>
 
-  <!-- ============ 楼层选择 ============ -->
+  <!-- 楼层选择 -->
   <div class="page hidden" id="page-floor">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -62,7 +59,7 @@
     <div class="page-body scrollable" id="floorBody"></div>
   </div>
 
-  <!-- ============ 穿戴 ============ -->
+  <!-- 人物 -->
   <div class="page hidden" id="page-worn">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -72,7 +69,7 @@
     <div class="page-body scrollable" id="wornBody"></div>
   </div>
 
-  <!-- ============ 背包 ============ -->
+  <!-- 背包 -->
   <div class="page hidden" id="page-bag">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -85,7 +82,7 @@
     </div>
   </div>
 
-  <!-- ============ 洗练 ============ -->
+  <!-- 洗练 -->
   <div class="page hidden" id="page-refine">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -95,7 +92,7 @@
     <div class="page-body scrollable" id="refineBody"></div>
   </div>
 
-  <!-- ============ 镶嵌 ============ -->
+  <!-- 镶嵌 -->
   <div class="page hidden" id="page-socket">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -105,7 +102,17 @@
     <div class="page-body scrollable" id="socketBody"></div>
   </div>
 
-  <!-- ============ 商店 ============ -->
+  <!-- 技能升级 -->
+  <div class="page hidden" id="page-skill">
+    <div class="page-header">
+      <button class="nav-back" onclick="Nav.back()">← 返回</button>
+      <span class="title">技能升级</span>
+      <button class="nav-home" onclick="Nav.home()">⌂</button>
+    </div>
+    <div class="page-body scrollable" id="skillBody"></div>
+  </div>
+
+  <!-- 商店 -->
   <div class="page hidden" id="page-shop">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -118,7 +125,7 @@
     </div>
   </div>
 
-  <!-- ============ 任务 ============ -->
+  <!-- 任务 -->
   <div class="page hidden" id="page-quest">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -131,7 +138,7 @@
     </div>
   </div>
 
-  <!-- ============ 宠物 ============ -->
+  <!-- 宠物 -->
   <div class="page hidden" id="page-pet">
     <div class="page-header">
       <button class="nav-back" onclick="Nav.back()">← 返回</button>
@@ -141,7 +148,27 @@
     <div class="page-body scrollable" id="petBody"></div>
   </div>
 
-  <!-- ============ 战斗 ============ -->
+  <!-- 存档页 -->
+  <div class="page hidden" id="page-save">
+    <div class="page-header">
+      <button class="nav-back" onclick="Nav.back()">← 返回</button>
+      <span class="title">选择存档槽</span>
+      <button class="nav-home" onclick="Nav.home()">⌂</button>
+    </div>
+    <div class="page-body scrollable" id="saveBody"></div>
+  </div>
+
+  <!-- 读档页 -->
+  <div class="page hidden" id="page-load">
+    <div class="page-header">
+      <button class="nav-back" onclick="Nav.back()">← 返回</button>
+      <span class="title">选择读档槽</span>
+      <button class="nav-home" onclick="Nav.home()">⌂</button>
+    </div>
+    <div class="page-body scrollable" id="loadBody"></div>
+  </div>
+
+  <!-- 战斗 -->
   <div class="page hidden" id="page-battle">
     <div class="page-header" style="position:relative;">
       <button class="nav-back" onclick="Combat.quit()">← 退出</button>
@@ -164,7 +191,8 @@
         <button class="btn" id="bSkill3" onclick="Combat.useSkill('zhiyu')"><span class="kbd-tag">E</span>治愈</button>
       </div>
       <div class="row">
-        <button class="btn" id="bSkill4" onclick="Combat.useSkill('zhanshen')"><span class="kbd-tag">R</span>战神</button>
+        <button class="btn" id="bSkill4" onclick="Combat.useSkill('du')"><span class="kbd-tag">T</span>毒术</button>
+        <button class="btn" id="bSkill5" onclick="Combat.useSkill('zhanshen')"><span class="kbd-tag">R</span>战神</button>
         <button class="btn warn" id="bRageBtn" onclick="Combat.useRage()"><span class="kbd-tag">空格</span>怒斩</button>
         <button class="btn" onclick="Combat.potion()"><span class="kbd-tag">Z</span>红药</button>
         <button class="btn" onclick="Combat.potionMp()"><span class="kbd-tag">X</span>蓝药</button>
@@ -175,7 +203,7 @@
 
 </div>
 
-<!-- 装备详情弹窗 -->
+<!-- 装备详情 / 分解弹窗 -->
 <div id="equipModal" class="modal hidden">
   <div class="modal-box" id="equipModalBody"></div>
 </div>
@@ -183,7 +211,6 @@
 <div id="toast"></div>
 <div id="confirm" class="hidden"><div class="box"><div class="msg" id="cfmMsg"></div><div class="row"><button class="btn ghost" id="cfmNo">取消</button><button class="btn primary" id="cfmYes">确定</button></div></div></div>
 
-<!-- 模块加载顺序（不要改） -->
 <script src="js/config.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/state.js"></script>
