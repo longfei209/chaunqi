@@ -1,12 +1,6 @@
 /* ============================================================
  *  render.js  —— 导航 + 各页面渲染
- *
- *  本轮改动：
- *   - 主页顶栏精简（只留 Lv + HP/MP/EXP）
- *   - 背包页顶部显示 金币/红/蓝/材
- *   - 人物页显示全部属性（攻击区间）
- *   - 装备卡片可点击弹窗查看详情
- *   - 商店 tab：道具 | 宝石
+ *  新增：主页"下一层"按钮 + 技能升级页 + 书页显示
  * ============================================================ */
 
 const Nav = {
@@ -39,18 +33,52 @@ const Nav = {
       case 'floor':  Render.floorPage(); break;
       case 'worn':   Render.wornPage(); break;
       case 'bag':    Render.bagPage(opts); break;
-      case 'refine': Render.refinePage(opts && opts.idx); break;
+      case 'refine': Render.refinePage(opts); break;
       case 'shop':   Render.shopPage(opts); break;
       case 'quest':  Render.questPage(opts && opts.page || 1); break;
       case 'pet':    Render.petPage(); break;
       case 'socket': Render.socketPage(opts); break;
+      case 'skill':  Render.skillPage(); break;
+      case 'save':   Render.savePage(); break;
+      case 'load':   Render.loadPage(); break;
       case 'battle': Combat.render(); break;
     }
   }
 };
 
+function _rangeTxt(baseMin, baseMax, refineVal){
+  const baseTxt = `${baseMin}-${baseMax}`;
+  if(!refineVal) return baseTxt;
+  return `${baseTxt}[+${refineVal}]`;
+}
+function _hpTxt(baseHp, refineHp){
+  const baseTxt = `+${baseHp}`;
+  if(!refineHp) return baseTxt;
+  return `${baseTxt}[+${refineHp}]`;
+}
+function _socketsTxt(eq){
+  if(!eq || !eq.sockets) return '○○○';
+  return eq.sockets.map(g => g ? GEMS[g.key].icon : '○').join('');
+}
+
+/* 技能升级费用 */
+function _skillCost(targetLv){
+  return SKILL_UPGRADE_COST[targetLv] || 0;
+}
+/* 技能当前效果描述 */
+function _skillEffectDesc(key){
+  const lv = getSkillLv(key);
+  switch(key){
+    case 'liehuo': return `伤害 ×${skillDmgMul('liehuo', 1.8).toFixed(2)}`;
+    case 'banyue': return `群体 ×${skillDmgMul('banyue', 0.9).toFixed(2)}`;
+    case 'zhiyu':  return `回血 ${(skillHealRate('zhiyu', 0.25)*100).toFixed(1)}%`;
+    case 'du':     return `每回合 -${skillPoisonDmg()} HP，持续 3 回合`;
+    case 'zhanshen': return `攻防 +${Math.round((skillBuffMul('zhanshen', 1.3)-1)*100)}%，3 回合`;
+  }
+  return '';
+}
+
 const Render = {
-  /* ---------- 主页顶栏（只留 Lv + HP/MP/EXP） ---------- */
   top(){
     const p = Game.player;
     const mHp = playerMaxHp(), mMp = playerMaxMp();
@@ -64,7 +92,6 @@ const Render = {
     $('tExpTxt').textContent = p.exp + '/' + need;
   },
 
-  /* ---------- 主页 ---------- */
   home(){
     const box = $('homeMain');
     if(Game.ui.areaId == null || Game.ui.floorIdx == null){
@@ -81,6 +108,7 @@ const Render = {
     const cleared = st.groups.filter(g=>!g.alive).length;
     const total = st.groups.length;
     const bossDead = !!st.bossDeath;
+    const hasNextFloor = fi + 1 < ar.floors.length;
 
     let html = `<div class="floor-header">
       <span>📍 ${ar.name} · 第${fi+1}层</span>
@@ -106,13 +134,20 @@ const Render = {
       ${bossDead?'<div class="dim" style="font-size:11px;">等待复活（复活后需重新击杀才能解锁下一层）</div>':'<button class="btn primary" onclick="Combat.startBoss()">挑战 BOSS</button>'}
     </div>`;
 
+    // 打完 BOSS 且不是最后一层 → 显示"下一层"按钮
+    if(bossDead && hasNextFloor){
+      html += `<button class="btn primary" style="padding:14px;font-size:15px;margin-top:6px;" onclick="Render._enterFloor(${fi+1})">
+        ⬇ 进入第 ${fi+2} 层
+      </button>`;
+    }
+
     box.innerHTML = html;
   },
 
   areaPage(){
     let html = '';
     AREAS.forEach(ar=>{
-      const locked = !ar.unlock && !(ar.id==='dragonCity' && Game.flags.dragonCity);
+      const locked = !ar.unlock && !(Game.flags && Game.flags[ar.id]);
       if(locked) return;
       html += `<button class="btn primary" style="padding:14px;" onclick="Render._pickArea('${ar.id}')">${ar.name}</button>`;
     });
@@ -163,7 +198,6 @@ const Render = {
     Events.maybeTrigger();
   },
 
-  /* ---------- 人物（完整属性 + 装备卡片 + 弹窗） ---------- */
   wornPage(){
     const a = calcAttr();
     let html = `<div class="card">
@@ -181,13 +215,17 @@ const Render = {
     SLOT_ORDER.forEach(s=>{
       const e = Game.worn[s];
       if(e){
-        const r = equipFullRange(e);
+        const base = equipBaseRange(e);
+        const atkTxt = _rangeTxt(base.atkMin, base.atkMax, e.refineAtk);
+        const defTxt = _rangeTxt(base.defMin, base.defMax, e.refineDef);
+        const hpTxt  = _hpTxt(base.hp, e.refineHp);
         const q = QUALITY[e.quality];
         html += `<div class="card clickable" onclick="Render.showEquipDetail('worn','${s}')">
           <div class="card-title ${q.cls}">${e.name} <span class="dim">[${q.name}] ${SLOT_NAME[s]}</span></div>
-          <div class="card-meta">攻 ${r.atkMin}-${r.atkMax} 防 ${r.defMin}-${r.defMax} 速 ${r.spd} HP ${r.hp>0?'+'+r.hp:0}</div>
-          <div class="card-actions">
+          <div class="card-meta">攻 ${atkTxt} 防 ${defTxt} 速 ${base.spd} HP ${hpTxt} · 洗练 ${e.refineTimes}/3 · ${_socketsTxt(e)}</div>
+          <div class="card-actions worn-actions">
             <button class="btn" onclick="event.stopPropagation();Nav.go('socket',{type:'worn',slot:'${s}'})">镶嵌</button>
+            <button class="btn" onclick="event.stopPropagation();Nav.go('refine',{type:'worn',slot:'${s}'})">洗练</button>
             <button class="btn" onclick="event.stopPropagation();Equip.unwear('${s}')">卸下</button>
           </div>
         </div>`;
@@ -198,30 +236,27 @@ const Render = {
     $('wornBody').innerHTML = html;
   },
 
-  /* ---------- 背包 ---------- */
   bagPage(opts){
     opts = opts || {};
     const tab = opts.tab || 'equip';
     const page = opts.page || 1;
 
-    // 顶部信息
-    let html = `<div class="dim" style="font-size:11px;padding:0 0 6px;">
-      金 ${fmt(Game.player.gold)} · 红 ${Game.player.potion} · 蓝 ${Game.player.potionMp} · 材 ${Game.mat}
+    let headerHtml = `<div class="dim" style="font-size:11px;padding:0 0 6px;">
+      金 ${fmt(Game.player.gold)} · 📖 ${Game.pages||0} 页 · 红 ${Game.player.potion} · 蓝 ${Game.player.potionMp} · 材 ${Game.mat}
     </div>`;
-
-    // tab
-    html += `<div style="display:flex;gap:6px;margin-bottom:6px;">
+    headerHtml += `<div style="display:flex;gap:5px;margin-bottom:6px;">
       <button class="btn ${tab==='equip'?'primary':''}" onclick="Nav._show('bag',{tab:'equip',page:1})">装备</button>
       <button class="btn ${tab==='gem'?'primary':''}" onclick="Nav._show('bag',{tab:'gem',page:1})">宝石</button>
+      <button class="btn ${tab==='craft'?'primary':''}" onclick="Nav._show('bag',{tab:'craft',page:1})">合成</button>
     </div>`;
 
-    if(tab === 'equip'){
-      html += Render._bagEquipTab(page);
-    }else{
-      html += Render._bagGemTab(page);
-    }
-    $('bagList').innerHTML = html;
-    $('bagPager').innerHTML = '';
+    let result;
+    if(tab === 'equip') result = Render._bagEquipTab(page);
+    else if(tab === 'gem') result = Render._bagGemTab(page);
+    else result = Render._bagCraftTab(page);
+
+    $('bagList').innerHTML = headerHtml + result.list;
+    $('bagPager').innerHTML = result.pager || '';
   },
 
   _bagEquipTab(page){
@@ -237,13 +272,21 @@ const Render = {
       slice.forEach((e, i)=>{
         const idx = start + i;
         const q = QUALITY[e.quality];
-        const r = equipFullRange(e);
+        const base = equipBaseRange(e);
+        const atkTxt = _rangeTxt(base.atkMin, base.atkMax, e.refineAtk);
+        const defTxt = _rangeTxt(base.defMin, base.defMax, e.refineDef);
+        const hpTxt  = _hpTxt(base.hp, e.refineHp);
         const cmp = Equip.compareToWorn(e);
 
         const cmpLine = (label, nVal, oVal, isPct) => {
           if(nVal === 0 && oVal === 0) return '';
-          const arrow = compareArrow(nVal, oVal, isPct);
-          return `<span style="margin-right:6px;">${label} ${isPct?nVal+'%':nVal} ${arrow}</span>`;
+          const diff = nVal - oVal;
+          if(diff === 0) return '';
+          const up = diff > 0;
+          const cls = up ? 'cmp-up' : 'cmp-down';
+          const arrow = up ? '↑' : '↓';
+          const text = isPct ? signedPct(diff) : signed(diff);
+          return `<span style="margin-right:6px;">${label} ${text} ${arrow}</span>`;
         };
         const cmpHtml = [
           cmpLine('攻', cmp.atk.n, cmp.atk.o),
@@ -259,29 +302,31 @@ const Render = {
 
         html += `<div class="card clickable" onclick="Render.showEquipDetail('bag',${idx})">
           <div class="card-title ${q.cls}">${e.name} <span class="dim">[${q.name}]</span></div>
-          <div class="card-meta">攻 ${r.atkMin}-${r.atkMax} 防 ${r.defMin}-${r.defMax} 速 ${r.spd} HP ${r.hp>0?'+'+r.hp:0}</div>
+          <div class="card-meta">攻 ${atkTxt} 防 ${defTxt} 速 ${base.spd} HP ${hpTxt} · 洗练 ${e.refineTimes}/3 · ${_socketsTxt(e)}</div>
           <div class="card-meta" style="font-size:11px;">${cmpHtml || '<span class="dim">无对比</span>'}</div>
-          <div class="card-actions">
+          <div class="card-actions bag-actions">
             <button class="btn" onclick="event.stopPropagation();Equip.wear(${idx})">穿戴</button>
             <button class="btn" onclick="event.stopPropagation();Nav.go('socket',{type:'bag',idx:${idx}})">镶嵌</button>
-            <button class="btn" onclick="event.stopPropagation();Nav.go('refine',{idx:${idx}})">洗练</button>
+            <button class="btn" onclick="event.stopPropagation();Nav.go('refine',{type:'bag',idx:${idx}})">洗练</button>
             <button class="btn" onclick="event.stopPropagation();Equip.sell(${idx})">出售</button>
             <button class="btn" onclick="event.stopPropagation();Equip.decompose(${idx})">分解</button>
           </div>
         </div>`;
       });
     }
+    let pagerHtml = '';
     if(total > 1){
-      html += `<div class="pager">
+      pagerHtml = `<div class="pager">
         <button ${page<=1?'disabled':''} onclick="Nav._show('bag',{tab:'equip',page:${page-1}})">◀</button>
         <span>${page} / ${total}</span>
         <button ${page>=total?'disabled':''} onclick="Nav._show('bag',{tab:'equip',page:${page+1}})">▶</button>
       </div>`;
     }
-    return html;
+    return { list: html, pager: pagerHtml };
   },
 
   _bagGemTab(page){
+    page = page || 1;
     const order = ['red','blue','green','purple','orange','black','yellow','white'];
     const qOrder = ['legend','rare','normal'];
 
@@ -291,6 +336,59 @@ const Render = {
       if(!groups[k]) groups[k] = { key: g.key, quality: g.quality, count: 0 };
       groups[k].count++;
     });
+    const gemList = Object.values(groups).sort((a,b)=>{
+      const ai = order.indexOf(a.key), bi = order.indexOf(b.key);
+      if(ai !== bi) return ai - bi;
+      return qOrder.indexOf(a.quality) - qOrder.indexOf(b.quality);
+    });
+
+    const PAGE = PAGE_SIZE.bagGem;
+    const total = Math.max(1, Math.ceil(gemList.length / PAGE));
+    page = clamp(page, 1, total);
+    const start = (page-1) * PAGE;
+    const slice = gemList.slice(start, start + PAGE);
+
+    let html = `<div class="dim" style="font-size:11px;padding:0 0 4px;">宝石 ${Game.gems.length} 颗</div>`;
+
+    if(gemList.length === 0){
+      html += `<div class="card dim">暂无宝石（怪物掉落或商店购买）</div>`;
+    }else{
+      slice.forEach(it=>{
+        const cfg = GEMS[it.key];
+        const qCfg = GEM_QUALITY[it.quality];
+        const statVal = cfg.type==='pct'
+          ? gemValue(it.key,it.quality)+'%'
+          : '+'+gemValue(it.key,it.quality);
+        html += `<div class="card" style="padding:6px 8px;">
+          <div class="card-title" style="font-size:13px;margin-bottom:4px;">
+            <span style="color:${cfg.color};font-size:16px;">${cfg.icon}</span>
+            ${cfg.name}
+            <span style="float:right;color:#9d9;">×${it.count}</span>
+          </div>
+          <div style="font-size:11px;color:#aaa;margin-bottom:2px;">${qCfg.name}</div>
+          <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px;">${cfg.desc} ${statVal}</div>
+          <div class="card-actions">
+            <button class="btn" onclick="Render._openGemDecompose('${it.key}','${it.quality}')">分解</button>
+          </div>
+        </div>`;
+      });
+    }
+    let pagerHtml = '';
+    if(total > 1){
+      pagerHtml = `<div class="pager">
+        <button ${page<=1?'disabled':''} onclick="Nav._show('bag',{tab:'gem',page:${page-1}})">◀</button>
+        <span>${page} / ${total}</span>
+        <button ${page>=total?'disabled':''} onclick="Nav._show('bag',{tab:'gem',page:${page+1}})">▶</button>
+      </div>`;
+    }
+    return { list: html, pager: pagerHtml };
+  },
+
+  _bagCraftTab(page){
+    page = page || 1;
+    const order = ['red','blue','green','purple','orange','black','yellow','white'];
+    const qOrder = ['legend','rare','normal'];
+
     const fragGroups = [];
     order.forEach(k=>{
       const f = Game.fragments[k];
@@ -299,56 +397,48 @@ const Render = {
         if(f[q] > 0) fragGroups.push({ key:k, quality:q, count:f[q] });
       });
     });
-    const gemList = Object.values(groups).sort((a,b)=>{
-      const ai = order.indexOf(a.key), bi = order.indexOf(b.key);
-      if(ai !== bi) return ai - bi;
-      return qOrder.indexOf(a.quality) - qOrder.indexOf(b.quality);
-    });
 
-    let html = `<div class="dim" style="font-size:11px;padding:0 0 4px;">宝石 ${Game.gems.length} 颗</div>`;
+    const PAGE = PAGE_SIZE.bagGem;
+    const total = Math.max(1, Math.ceil(fragGroups.length / PAGE));
+    page = clamp(page, 1, total);
+    const start = (page-1) * PAGE;
+    const slice = fragGroups.slice(start, start + PAGE);
 
-    if(gemList.length === 0){
-      html += `<div class="card dim">暂无宝石（怪物掉落或商店购买）</div>`;
+    const totalFrags = fragGroups.reduce((s,x)=>s+x.count,0);
+    let html = `<div class="dim" style="font-size:11px;padding:0 0 4px;">碎片 ${totalFrags} 个</div>`;
+
+    if(fragGroups.length === 0){
+      html += `<div class="card dim">暂无碎片（宝石分解或怪物掉落获得）</div>`;
     }else{
-      gemList.forEach(g=>{
-        const cfg = GEMS[g.key];
-        const qCfg = GEM_QUALITY[g.quality];
-        html += `<div class="card" style="padding:5px 7px;">
-          <div class="card-title" style="font-size:12px;">
-            <span style="color:${cfg.color};font-size:15px;">${cfg.icon}</span>
-            ${cfg.name}
-            <span class="dim">[${qCfg.name}]</span>
-            <span style="float:right;color:#9d9;">×${g.count}</span>
-          </div>
-          <div class="card-meta">效果：${cfg.desc} ${cfg.type==='pct'?gemValue(g.key,g.quality)+'%':'+'+gemValue(g.key,g.quality)}</div>
-        </div>`;
-      });
-    }
-
-    html += `<div class="dim" style="font-size:11px;padding:6px 0 4px;">碎片</div>`;
-    const fragHas = fragGroups.filter(f=>f.count>0);
-    if(fragHas.length === 0){
-      html += `<div class="card dim" style="font-size:11px;">暂无碎片（3 碎片可合成 1 颗普通宝石）</div>`;
-    }else{
-      fragHas.forEach(f=>{
+      slice.forEach(f=>{
         const cfg = GEMS[f.key];
         const qCfg = GEM_QUALITY[f.quality];
-        html += `<div class="card" style="padding:5px 7px;">
-          <div class="card-title" style="font-size:12px;">
+        html += `<div class="card" style="padding:6px 8px;">
+          <div class="card-title" style="font-size:13px;">
             <span style="color:${cfg.color};font-size:15px;">🧩</span>
             ${cfg.name}碎片
             <span class="dim">[${qCfg.name}]</span>
             <span style="float:right;color:#9d9;">×${f.count}</span>
           </div>
-          <div class="card-actions" style="margin-top:4px;">
-            ${f.quality==='normal'?`<button class="btn" onclick="Render._craftGem('${f.key}')">合成宝石(3)</button>`:''}
-            ${f.quality==='normal'?`<button class="btn" onclick="Render._upgradeFrag('${f.key}','normal','rare')">升级稀有(3)</button>`:''}
-            ${f.quality==='rare'?`<button class="btn" onclick="Render._upgradeFrag('${f.key}','rare','legend')">升级传说(3)</button>`:''}
+          <div class="card-actions" style="margin-top:6px;">
+            ${f.quality==='normal' && f.count>=3 ? `<button class="btn" onclick="Render._craftGem('${f.key}')">合成</button>` : ''}
+            ${f.quality==='normal' && f.count>=6 ? `<button class="btn" onclick="Render._craftAllGem('${f.key}')">合成全部</button>` : ''}
+            ${f.quality==='normal' && f.count>=3 ? `<button class="btn ghost" onclick="Render._upgradeFrag('${f.key}','normal','rare')">升级稀有</button>` : ''}
+            ${f.quality==='rare' && f.count>=3 ? `<button class="btn ghost" onclick="Render._upgradeFrag('${f.key}','rare','legend')">升级传说</button>` : ''}
+            ${f.quality==='legend' && f.count>=3 ? `<button class="btn primary" onclick="Render._craftLegendGem('${f.key}')">合成传说宝石</button>` : ''}
           </div>
         </div>`;
       });
     }
-    return html;
+    let pagerHtml = '';
+    if(total > 1){
+      pagerHtml = `<div class="pager">
+        <button ${page<=1?'disabled':''} onclick="Nav._show('bag',{tab:'craft',page:${page-1}})">◀</button>
+        <span>${page} / ${total}</span>
+        <button ${page>=total?'disabled':''} onclick="Nav._show('bag',{tab:'craft',page:${page+1}})">▶</button>
+      </div>`;
+    }
+    return { list: html, pager: pagerHtml };
   },
 
   _craftGem(key){
@@ -356,7 +446,16 @@ const Render = {
     if(!g) return toast("碎片不足");
     toast(`合成成功：${GEMS[g.key].name}（${GEM_QUALITY[g.quality].name}）`);
     Save.auto();
-    Nav._show('bag',{tab:'gem',page:1});
+    Nav._show('bag',{tab:'craft',page:1});
+    Render.top();
+  },
+  _craftAllGem(key){
+    let count = 0;
+    while(craftGem(key)) count++;
+    if(count === 0) return toast("碎片不足");
+    toast(`合成了 ${count} 颗${GEMS[key].name}`);
+    Save.auto();
+    Nav._show('bag',{tab:'craft',page:1});
     Render.top();
   },
   _upgradeFrag(key, fromQ, toQ){
@@ -364,12 +463,54 @@ const Render = {
     if(!ok) return toast("碎片不足");
     toast(`升级成功：${GEMS[key].name}碎片（${GEM_QUALITY[toQ].name}）`);
     Save.auto();
-    Nav._show('bag',{tab:'gem',page:1});
+    Nav._show('bag',{tab:'craft',page:1});
+  },
+  _craftLegendGem(key){
+    const g = craftLegendGem(key);
+    if(!g) return toast("传说碎片不足（需 3 个）");
+    toast(`合成成功：${GEMS[g.key].name}（传说）`);
+    Save.auto();
+    Nav._show('bag',{tab:'craft',page:1});
+    Render.top();
   },
 
-  /* ============================================================
-   *  装备详情弹窗
-   * ============================================================ */
+  _openGemDecompose(key, quality){
+    const total = Game.gems.filter(g => g.key === key && g.quality === quality).length;
+    if(total === 0) return toast("没有宝石");
+    const cfg = GEMS[key];
+    const qCfg = GEM_QUALITY[quality];
+
+    let btns = '';
+    if(total >= 1) btns += `<button class="btn" onclick="Render._doDecomposeGem('${key}','${quality}',1)">分解 1 颗</button>`;
+    if(total >= 3) btns += `<button class="btn" onclick="Render._doDecomposeGem('${key}','${quality}',3)">分解 3 颗</button>`;
+    if(total > 1)  btns += `<button class="btn danger" onclick="Render._doDecomposeGem('${key}','${quality}',${total})">全部 ×${total}</button>`;
+
+    const html = `
+      <div class="modal-title">
+        <span><span style="color:${cfg.color};font-size:16px;">${cfg.icon}</span> ${cfg.name} <span class="dim">[${qCfg.name}]</span></span>
+        <button class="modal-close" onclick="Render.closeEquipDetail()">✕</button>
+      </div>
+      <div class="modal-row"><span class="lbl">拥有</span><span>×${total}</span></div>
+      <div class="modal-actions" style="margin-top:10px;">${btns}</div>
+      <div class="modal-actions" style="margin-top:6px;">
+        <button class="btn ghost" onclick="Render.closeEquipDetail()">取消</button>
+      </div>
+    `;
+    $('equipModalBody').innerHTML = html;
+    $('equipModal').classList.remove('hidden');
+  },
+  _doDecomposeGem(key, quality, count){
+    const actual = decomposeGemsByKeyQuality(key, quality, count);
+    if(actual <= 0) return toast("分解失败");
+    const qCfg = GEM_QUALITY[quality];
+    toast(`分解 ${GEMS[key].name} ×${actual} → ${actual*2} 个${qCfg.name}碎片`);
+    Save.auto();
+    Render.closeEquipDetail();
+    const page = (Nav._lastOpts && Nav._lastOpts.page) || 1;
+    Nav._show('bag',{tab:'gem',page});
+    Render.top();
+  },
+
   showEquipDetail(refType, refId){
     let eq = null;
     if(refType === 'worn') eq = Game.worn[refId];
@@ -377,25 +518,28 @@ const Render = {
     if(!eq) return;
 
     const q = QUALITY[eq.quality];
-    const r = equipFullRange(eq);
     const base = equipBaseRange(eq);
     const gemB = equipGemBonus(eq);
     const afx = equipAffixDesc(eq);
     const socketsTxt = (eq.sockets||[]).map(g=>g?GEMS[g.key].icon:'○').join(' ');
 
-    // 操作按钮
+    const atkTxt = _rangeTxt(base.atkMin, base.atkMax, eq.refineAtk);
+    const defTxt = _rangeTxt(base.defMin, base.defMax, eq.refineDef);
+    const hpTxt  = _hpTxt(base.hp, eq.refineHp);
+
     let actions = '';
     if(refType === 'bag'){
       actions = `
         <button class="btn" onclick="Equip.wear(${refId});Render.closeEquipDetail()">穿戴</button>
         <button class="btn" onclick="Render.closeEquipDetail();Nav.go('socket',{type:'bag',idx:${refId}})">镶嵌</button>
-        <button class="btn" onclick="Render.closeEquipDetail();Nav.go('refine',{idx:${refId}})">洗练</button>
+        <button class="btn" onclick="Render.closeEquipDetail();Nav.go('refine',{type:'bag',idx:${refId}})">洗练</button>
         <button class="btn" onclick="Equip.sell(${refId});Render.closeEquipDetail()">出售</button>
         <button class="btn" onclick="Equip.decompose(${refId});Render.closeEquipDetail()">分解</button>
       `;
     }else{
       actions = `
         <button class="btn" onclick="Render.closeEquipDetail();Nav.go('socket',{type:'worn',slot:'${refId}'})">镶嵌</button>
+        <button class="btn" onclick="Render.closeEquipDetail();Nav.go('refine',{type:'worn',slot:'${refId}'})">洗练</button>
         <button class="btn" onclick="Equip.unwear('${refId}');Render.closeEquipDetail()">卸下</button>
       `;
     }
@@ -406,10 +550,10 @@ const Render = {
         <button class="modal-close" onclick="Render.closeEquipDetail()">✕</button>
       </div>
       <div class="modal-row"><span class="lbl">槽位</span><span>${SLOT_NAME[eq.slot]}</span></div>
-      <div class="modal-row"><span class="lbl">攻击</span><span>${r.atkMin}-${r.atkMax}</span></div>
-      <div class="modal-row"><span class="lbl">防御</span><span>${r.defMin}-${r.defMax}</span></div>
-      <div class="modal-row"><span class="lbl">速度</span><span>${r.spd}</span></div>
-      <div class="modal-row"><span class="lbl">生命</span><span>${r.hp>0?'+'+r.hp:0}</span></div>
+      <div class="modal-row"><span class="lbl">攻击</span><span>${atkTxt}</span></div>
+      <div class="modal-row"><span class="lbl">防御</span><span>${defTxt}</span></div>
+      <div class="modal-row"><span class="lbl">速度</span><span>${base.spd}</span></div>
+      <div class="modal-row"><span class="lbl">生命</span><span>${hpTxt}</span></div>
       ${(gemB.atk+gemB.def+gemB.hp+gemB.spd+gemB.combo+gemB.counter+gemB.lsPct+gemB.lsFlat+gemB.crit) > 0
         ? `<div class="modal-row"><span class="lbl">宝石加成</span><span>攻+${gemB.atk} 防+${gemB.def} 速+${gemB.spd} HP+${gemB.hp} 连${gemB.combo}% 反${gemB.counter}% 吸${gemB.lsPct}% 固${gemB.lsFlat} 暴${gemB.crit}%</span></div>`
         : ''}
@@ -425,7 +569,6 @@ const Render = {
     $('equipModal').classList.add('hidden');
   },
 
-  /* ---------- 镶嵌页 ---------- */
   socketPage(opts){
     opts = opts || {};
     const eq = Equip.findEquipByRef(opts);
@@ -471,10 +614,14 @@ const Render = {
       sorted.forEach(gem=>{
         const cfg = GEMS[gem.key];
         const qCfg = GEM_QUALITY[gem.quality];
+        const statVal = cfg.type==='pct'
+          ? gemValue(gem.key,gem.quality)+'%'
+          : '+'+gemValue(gem.key,gem.quality);
         html += `<div class="card" style="flex:0 0 calc(33% - 4px);padding:5px;align-items:center;cursor:pointer;" onclick="Render._pickGem('${gem.uid}')">
           <div style="font-size:20px;color:${cfg.color};">${cfg.icon}</div>
           <div style="font-size:9px;">${cfg.name}</div>
-          <div style="font-size:9px;color:#888;">${qCfg.name} · ${cfg.type==='pct'?gemValue(gem.key,gem.quality)+'%':'+'+gemValue(gem.key,gem.quality)}</div>
+          <div style="font-size:9px;color:#888;">${qCfg.name}</div>
+          <div style="font-size:11px;font-weight:700;color:#fff;">${cfg.desc} ${statVal}</div>
         </div>`;
       });
       html += `</div>`;
@@ -490,7 +637,6 @@ const Render = {
       if(btn){ btn.classList.add('primary'); btn.textContent = '已选'; }
     }
   },
-
   _selectSocket(i){
     this._socketSelected = i;
     Render.socketPage(Nav._lastOpts);
@@ -510,42 +656,108 @@ const Render = {
     Render.socketPage(Nav._lastOpts);
   },
 
-  /* ---------- 洗练 ---------- */
-  refinePage(idx){
-    if(idx == null || !Game.bag[idx]) { Nav.back(); return; }
-    const e = Game.bag[idx];
-    const r = equipFullRange(e), q = QUALITY[e.quality];
-    const risk = Equip.refineRisk(e);
-    const afx = equipAffixDesc(e);
+  refinePage(opts){
+    opts = opts || {};
+    let eq = null;
+    if(opts.type === 'worn') eq = Game.worn[opts.slot];
+    else if(opts.type === 'bag') eq = Game.bag[opts.idx];
+    else if(typeof opts === 'number') eq = Game.bag[opts];
+
+    if(!eq){ Nav.back(); return; }
+
+    const base = equipBaseRange(eq), q = QUALITY[eq.quality];
+    const risk = Equip.refineRisk(eq);
+    const afx = equipAffixDesc(eq);
+    const isWorn = opts.type === 'worn';
+
+    const atkTxt = _rangeTxt(base.atkMin, base.atkMax, eq.refineAtk);
+    const defTxt = _rangeTxt(base.defMin, base.defMax, eq.refineDef);
+    const hpTxt  = _hpTxt(base.hp, eq.refineHp);
+
     let html = `<div class="card">
-      <div class="card-title ${q.cls}">${e.name} [${q.name}]</div>
-      <div class="card-meta">区间 攻${r.atkMin}-${r.atkMax} 防${r.defMin}-${r.defMax}</div>
-      <div class="card-meta">速${r.spd} HP+${r.hp} ${afx?'· '+afx:''}</div>
-      <div class="card-meta">洗练次数 ${e.refineTimes}/3 · 持有材料 ${Game.mat}</div>
+      <div class="card-title ${q.cls}">${eq.name} [${q.name}]${isWorn?' <span class="dim">(装备中)</span>':''}</div>
+      <div class="card-meta">区间 攻 ${atkTxt} 防 ${defTxt} HP ${hpTxt}</div>
+      <div class="card-meta">速${base.spd} ${afx?'· '+afx:''}</div>
+      <div class="card-meta">洗练次数 ${eq.refineTimes}/3 · 持有材料 ${Game.mat}</div>
       <div class="card-meta">本次风险：${(risk*100).toFixed(1)}% 破损</div>
       <div class="card-actions">
-        <button class="btn primary" onclick="Equip.refine(${idx})">执行洗练(耗1材料)</button>
+        <button class="btn primary" onclick="Render._doRefine()">执行洗练(耗1材料)</button>
       </div>
     </div>`;
     $('refineBody').innerHTML = html;
   },
+  _doRefine(){
+    const opts = Nav._lastOpts || {};
+    let eq = null;
+    if(opts.type === 'worn') eq = Game.worn[opts.slot];
+    else if(opts.type === 'bag') eq = Game.bag[opts.idx];
+    if(!eq) return;
+    Equip.refine(eq);
+  },
 
-  /* ---------- 商店（两个 tab） ---------- */
+  /* ---------- 技能升级页 ---------- */
+  skillPage(){
+    const order = ['liehuo','banyue','zhiyu','du','zhanshen'];
+    let html = `<div class="dim" style="font-size:12px;padding:0 0 8px;">
+      📖 书页：<b style="color:#fff;">${Game.pages||0}</b> （商店 300 金/张）
+    </div>`;
+
+    order.forEach(k=>{
+      const sk = SKILLS[k];
+      const lv = getSkillLv(k);
+      const maxed = lv >= sk.maxLv;
+      const nextLv = lv + 1;
+      const cost = maxed ? 0 : _skillCost(nextLv);
+      const canUp = !maxed && (Game.pages||0) >= cost;
+
+      html += `<div class="card">
+        <div class="card-title">${sk.name} <span class="dim">Lv.${lv}/${sk.maxLv}</span></div>
+        <div class="card-meta">${sk.desc} · ${_skillEffectDesc(k)}</div>
+        <div class="card-meta">解锁 Lv.${sk.unlock} · 蓝耗 ${sk.mp} · CD ${sk.cd} 回合</div>
+        ${maxed
+          ? `<div class="card-meta" style="color:#9d9;">已满级</div>`
+          : `<div class="card-meta">升级到 Lv.${nextLv} 需 📖 ${cost}</div>
+             <div class="card-actions">
+               <button class="btn ${canUp?'primary':''}" onclick="Render._doSkillUp('${k}')" ${canUp?'':'disabled'}>升级</button>
+             </div>`}
+      </div>`;
+    });
+
+    $('skillBody').innerHTML = html;
+  },
+  _doSkillUp(key){
+    const sk = SKILLS[key];
+    const lv = getSkillLv(key);
+    if(lv >= sk.maxLv) return toast("已满级");
+    const cost = _skillCost(lv + 1);
+    if((Game.pages||0) < cost) return toast(`书页不足（需 ${cost}）`);
+    Game.pages -= cost;
+    Game.skillLv[key] = lv + 1;
+    toast(`${sk.name} 升级到 Lv.${lv+1}！`);
+    Save.auto();
+    Render.skillPage();
+    Render.top();
+  },
+
   shopPage(opts){
     opts = opts || {};
     const tab = opts.tab || 'item';
     const page = opts.page || 1;
 
-    let html = `<div style="display:flex;gap:6px;margin-bottom:6px;">
-      <button class="btn ${tab==='item'?'primary':''}" onclick="Nav._show('shop',{tab:'item',page:1})">道具</button>
-      <button class="btn ${tab==='gem'?'primary':''}" onclick="Nav._show('shop',{tab:'gem',page:1})">宝石</button>
+    let html = `<div class="dim" style="font-size:12px;padding:0 0 6px;">
+      💰 金币：<b style="color:#d8b;">${fmt(Game.player.gold)}</b> · 📖 书页：<b style="color:#fff;">${Game.pages||0}</b>
     </div>`;
 
-    if(tab === 'item'){
-      html += Render._shopItemTab(page);
-    }else{
-      html += Render._shopGemTab(page);
-    }
+    html += `<div style="display:flex;gap:6px;margin-bottom:6px;">
+      <button class="btn ${tab==='item'?'primary':''}" onclick="Nav._show('shop',{tab:'item',page:1})">道具</button>
+      <button class="btn ${tab==='gem'?'primary':''}" onclick="Nav._show('shop',{tab:'gem',page:1})">宝石</button>
+      <button class="btn ${tab==='page'?'primary':''}" onclick="Nav._show('shop',{tab:'page',page:1})">书页</button>
+    </div>`;
+
+    if(tab === 'item') html += Render._shopItemTab(page);
+    else if(tab === 'gem') html += Render._shopGemTab(page);
+    else html += Render._shopPageTab(page);
+
     $('shopList').innerHTML = html;
     $('shopPager').innerHTML = '';
   },
@@ -586,28 +798,83 @@ const Render = {
   },
 
   _shopGemTab(page){
+    page = page || 1;
     const order = ['red','blue','green','purple','orange','black','yellow','white'];
-    let html = `<div class="card">
-      <div class="card-title">💎 宝石商店</div>
-      <div class="card-meta">购买宝石后，去「人物」或「背包」点装备卡片 → 镶嵌</div>
-    </div>`;
-    html += `<div class="dim" style="font-size:11px;padding:6px 0 4px;">普通宝石 · ${GEM_SHOP_PRICE}金/颗</div>`;
+
+    const items = [];
+    items.push({
+      label: '💎 宝石商店',
+      sub: '购买宝石后，去「人物」或「背包」点装备卡片 → 镶嵌',
+      action: null
+    });
     order.forEach(k=>{
       const g = GEMS[k];
+      items.push({
+        label: `${g.icon} ${g.name} [普通]`,
+        sub: `${g.desc} +${g.val[0]}${g.type==='pct'?'%':''} · ${GEM_SHOP_PRICE}金`,
+        action: `Shop.buyGem('${k}')`
+      });
+    });
+
+    const total = Math.ceil(items.length / PAGE_SIZE.shop);
+    page = clamp(page, 1, total);
+    const start = (page-1) * PAGE_SIZE.shop;
+    const slice = items.slice(start, start + PAGE_SIZE.shop);
+
+    let html = '';
+    slice.forEach(it=>{
       html += `<div class="card" style="padding:6px 8px;">
-        <div class="card-title" style="font-size:12px;">
-          <span style="color:${g.color};font-size:16px;">${g.icon}</span>
-          ${g.name}
-          <span class="dim">[普通]</span>
-        </div>
-        <div class="card-meta">${g.desc} +${g.val[0]}${g.type==='pct'?'%':''} · ${GEM_SHOP_PRICE}金</div>
-        <div class="card-actions"><button class="btn" onclick="Shop.buyGem('${k}')">购买</button></div>
+        <div class="card-title" style="font-size:12px;">${it.label}</div>
+        <div class="card-meta">${it.sub}</div>
+        ${it.action ? `<div class="card-actions"><button class="btn" onclick="${it.action}">购买</button></div>` : ''}
+      </div>`;
+    });
+
+    if(total > 1){
+      html += `<div class="pager">
+        <button ${page<=1?'disabled':''} onclick="Nav._show('shop',{tab:'gem',page:${page-1}})">◀</button>
+        <span>${page} / ${total}</span>
+        <button ${page>=total?'disabled':''} onclick="Nav._show('shop',{tab:'gem',page:${page+1}})">▶</button>
+      </div>`;
+    }
+    return html;
+  },
+
+  _shopPageTab(page){
+    page = page || 1;
+    const items = [];
+    items.push({
+      label: '📖 书页 ×1',
+      sub: `${PAGE_PRICE}金 · 用于技能升级`,
+      action: `Shop.buyPage(1)`
+    });
+    items.push({
+      label: '📖 书页 ×5',
+      sub: `${PAGE_PRICE*5}金`,
+      action: `Shop.buyPage(5)`
+    });
+    items.push({
+      label: '📖 书页 ×10',
+      sub: `${PAGE_PRICE*10}金`,
+      action: `Shop.buyPage(10)`
+    });
+    items.push({
+      label: '💰 出售书页',
+      sub: `每张 ${PAGE_SELL} 金 · 当前拥有 ${Game.pages||0} 页`,
+      action: `Shop.sellPage(1)`
+    });
+
+    let html = '';
+    items.forEach(it=>{
+      html += `<div class="card" style="padding:6px 8px;">
+        <div class="card-title" style="font-size:12px;">${it.label}</div>
+        <div class="card-meta">${it.sub}</div>
+        <div class="card-actions"><button class="btn" onclick="${it.action}">${it.label.includes('出售')?'出售':'购买'}</button></div>
       </div>`;
     });
     return html;
   },
 
-  /* ---------- 任务 ---------- */
   questPage(page){
     page = page || 1;
     Quest.refreshPool(false);
@@ -648,7 +915,6 @@ const Render = {
       : '';
   },
 
-  /* ---------- 宠物 ---------- */
   petPage(){
     const limit = petSlotLimit();
     const activeCount = Game.activePets.length;
@@ -693,15 +959,115 @@ const Render = {
       });
     }
     $('petBody').innerHTML = html;
+  },
+
+  savePage(){
+    const fmtTime = (ts)=>{
+      if(!ts) return '';
+      const d = new Date(ts);
+      const pad = n => n<10?'0'+n:''+n;
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+
+    let html = `<div class="dim" style="font-size:12px;padding:0 0 8px;">
+      手动存档有 2 个槽位，覆盖前会确认。
+    </div>`;
+
+    const autoSum = Save.getSummary(Save.KEY_AUTO);
+    html += `<div class="card" style="opacity:.7;">
+      <div class="card-title">🤖 自动存档 <span class="dim">[系统]</span></div>
+      <div class="card-meta">${autoSum
+        ? `Lv.${autoSum.lv} · ${fmt(autoSum.gold)}金 · ${fmtTime(autoSum.ts)}`
+        : '暂无自动存档'}</div>
+      <div class="card-meta dim" style="font-size:11px;">关键节点自动写入，不可手动覆盖</div>
+    </div>`;
+
+    const m1 = Save.getSummary(Save.KEY_M1);
+    html += `<div class="card">
+      <div class="card-title">📁 手动存档 1</div>
+      <div class="card-meta">${m1
+        ? `Lv.${m1.lv} · ${fmt(m1.gold)}金 · ${fmtTime(m1.ts)}`
+        : '空槽'}</div>
+      <div class="card-actions">
+        <button class="btn ${m1?'danger':'primary'}" onclick="Render._doSave(1)">
+          ${m1?'覆盖保存':'保存到槽 1'}
+        </button>
+      </div>
+    </div>`;
+
+    const m2 = Save.getSummary(Save.KEY_M2);
+    html += `<div class="card">
+      <div class="card-title">📁 手动存档 2</div>
+      <div class="card-meta">${m2
+        ? `Lv.${m2.lv} · ${fmt(m2.gold)}金 · ${fmtTime(m2.ts)}`
+        : '空槽'}</div>
+      <div class="card-actions">
+        <button class="btn ${m2?'danger':'primary'}" onclick="Render._doSave(2)">
+          ${m2?'覆盖保存':'保存到槽 2'}
+        </button>
+      </div>
+    </div>`;
+
+    $('saveBody').innerHTML = html;
+  },
+
+  _doSave(slot){
+    const key = slot === 1 ? Save.KEY_M1 : Save.KEY_M2;
+    const exists = Save.getSummary(key);
+    if(exists){
+      confirmBox(`覆盖手动存档 ${slot}？`, ()=>{
+        Save.manual(slot);
+        Render.savePage();
+      });
+    }else{
+      Save.manual(slot);
+      Render.savePage();
+    }
+  },
+
+  loadPage(){
+    const fmtTime = (ts)=>{
+      if(!ts) return '';
+      const d = new Date(ts);
+      const pad = n => n<10?'0'+n:''+n;
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+
+    let html = `<div class="dim" style="font-size:12px;padding:0 0 8px;">
+      点击「读取」加载对应槽的进度（会覆盖当前进度）
+    </div>`;
+
+    const slots = [
+      { id:'auto', key: Save.KEY_AUTO, label:'🤖 自动存档' },
+      { id:1,      key: Save.KEY_M1,   label:'📁 手动存档 1' },
+      { id:2,      key: Save.KEY_M2,   label:'📁 手动存档 2' }
+    ];
+
+    slots.forEach(sl=>{
+      const sum = Save.getSummary(sl.key);
+      html += `<div class="card">
+        <div class="card-title">${sl.label}</div>
+        <div class="card-meta">${sum
+          ? `Lv.${sum.lv} · ${fmt(sum.gold)}金 · ${fmtTime(sum.ts)}`
+          : '空槽'}</div>
+        ${sum ? `<div class="card-actions"><button class="btn primary" onclick="Render._doLoad('${sl.id}')">读取</button></div>` : ''}
+      </div>`;
+    });
+
+    $('loadBody').innerHTML = html;
+  },
+
+  _doLoad(slot){
+    confirmBox("读取此存档会覆盖当前进度，确定？", ()=>{
+      Save.load(slot);
+    });
   }
 };
 
-/* 定时刷新 */
 setInterval(()=>{
   if(!$('page-home').classList.contains('hidden')) Render.top();
   if(Game.battle) Combat.render();
-  // 宠物复活检查
-  if(tickPetRespawn && tickPetRespawn()){
+  if(typeof tickPetRespawn === 'function' && tickPetRespawn()){
     if(!$('page-pet').classList.contains('hidden')) Render.petPage();
     if(Game.battle) Combat.render();
     Render.top();

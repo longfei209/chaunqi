@@ -1,12 +1,6 @@
 /* ============================================================
  *  hotkeys.js  —— 全局快捷键
- *
- *  战斗中：
- *    1 攻击 / Q 烈火 / W 半月 / E 治愈 / R 战神
- *    空格 怒斩 / Z 红药 / X 蓝药 / Tab 自动
- *    战斗中禁用 ESC（防止误退出）
- *  非战斗：
- *    ESC 返回上一页
+ *  战斗：1攻击 Q烈火 W半月 E治愈 T毒术 R战神 空格怒斩 Z红药 X蓝药 Tab自动
  * ============================================================ */
 
 document.addEventListener('keydown', e => {
@@ -18,7 +12,6 @@ document.addEventListener('keydown', e => {
     }
     return;
   }
-
   if(!Game.battle) return;
   if($('page-battle').classList.contains('hidden')) return;
   if(e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
@@ -33,6 +26,7 @@ document.addEventListener('keydown', e => {
   else if(kl === 'q'){ e.preventDefault(); Combat.useSkill('liehuo'); }
   else if(kl === 'w'){ e.preventDefault(); Combat.useSkill('banyue'); }
   else if(kl === 'e'){ e.preventDefault(); Combat.useSkill('zhiyu'); }
+  else if(kl === 't'){ e.preventDefault(); Combat.useSkill('du'); }
   else if(kl === 'r'){ e.preventDefault(); Combat.useSkill('zhanshen'); }
   else if(kl === 'z'){ e.preventDefault(); Combat.potion(); }
   else if(kl === 'x'){ e.preventDefault(); Combat.potionMp(); }
