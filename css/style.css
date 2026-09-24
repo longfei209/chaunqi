@@ -13,7 +13,6 @@ body{
   height:100dvh;
   overflow:hidden;
 }
-
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;position:relative;}
 
 .btn{display:block;width:100%;padding:9px;margin:3px 0;background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:4px;text-align:center;transition:.12s;font-size:13px;}
@@ -58,7 +57,6 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   position:relative;
 }
 
-
 .page{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
 .page.hidden{display:none;}
 
@@ -71,10 +69,11 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .page-body.scrollable{overflow-y:auto;}
 .page-body.scrollable::-webkit-scrollbar{width:0;}
 
-.pager{display:flex;justify-content:center;align-items:center;gap:10px;padding:6px 0;font-size:12px;color:var(--tx2);}
+.pager{display:flex;justify-content:center;align-items:center;gap:10px;padding:8px 0 0;font-size:12px;color:var(--tx2);margin-top:auto;}
 .pager button{padding:4px 12px;border:1px solid var(--line2);border-radius:4px;font-size:12px;}
 .pager button:disabled{opacity:.3;}
 
+/* 主页顶栏 */
 .hud{padding:8px 10px;border-bottom:1px solid var(--line);background:var(--panel);font-size:14px;}
 .hud .hud-row{margin-bottom:4px;}
 .hud .hud-row:last-child{margin-bottom:0;}
@@ -95,14 +94,39 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .boss-block .btn{margin:0;padding:7px;font-size:12px;}
 .boss-block.dead{opacity:.5;}
 
+/* 卡片 */
 .card{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:7px;margin:0;font-size:12px;display:flex;flex-direction:column;}
 .card .card-title{font-size:13px;margin-bottom:2px;}
 .card .card-meta{font-size:11px;color:var(--tx3);margin-bottom:4px;}
 .card .card-actions{display:flex;gap:4px;flex-wrap:wrap;}
-.card .card-actions .btn{flex:1;min-width:0;margin:0;padding:5px 4px;font-size:11px;}
+.card .card-actions .btn{flex:1 1 calc(50% - 4px);min-width:0;margin:0;padding:6px 4px;font-size:12px;}
 .card.clickable{cursor:pointer;}
 .card.clickable:active{background:#2a2a2a;}
-.cards-list{display:flex;flex-direction:column;gap:5px;flex:1;min-height:0;}
+.cards-list{display:flex;flex-direction:column;gap:5px;min-height:0;}
+
+/* 人物页按钮：3 个一行 */
+.card .card-actions.worn-actions{
+  flex-wrap:nowrap;
+  gap:4px;
+}
+.card .card-actions.worn-actions .btn{
+  flex:1;
+  min-width:0;
+  padding:5px 2px;
+  font-size:11px;
+}
+
+/* 背包页按钮：5 个一行 */
+.card .card-actions.bag-actions{
+  flex-wrap:nowrap;
+  gap:3px;
+}
+.card .card-actions.bag-actions .btn{
+  flex:1;
+  min-width:0;
+  padding:6px 1px;
+  font-size:11px;
+}
 
 /* ============================================================
  *  战斗界面
@@ -197,7 +221,6 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   text-align:center;
 }
 
-/* 血条 / 蓝条 —— 统一 7px 高 */
 .unit-box .u-bar{
   position:absolute;
   left:4px; right:4px;
@@ -212,7 +235,6 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 .unit-box .u-bar.mp>i{ background:#8a8a9a; }
 .unit-box .u-bar.pet-hp>i{ background:#7a8a7a; }
 
-/* 血条数字 */
 .unit-box .u-num{
   position:absolute;
   inset:0;
@@ -230,12 +252,27 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   letter-spacing:-0.3px;
 }
 
-/* 怒气 */
 .rage-line{ font-size:10px; color:#e8a; }
 
+/* 战神 buff：金色脉冲 */
+.p-box.zs-active{
+  border-color:#d8b050;
+  animation:zsPulse 1.2s ease-in-out infinite;
+}
+@keyframes zsPulse{
+  0%,100%{ box-shadow:0 0 6px 1px rgba(220,180,80,0.4); }
+  50%    { box-shadow:0 0 18px 5px rgba(220,180,80,0.9); }
+}
+
+/* 底部按钮区 */
 .b-ctrl{padding:6px 8px 10px;border-top:1px solid var(--line);background:var(--panel);}
-.b-ctrl .tip{font-size:11px;color:var(--tx3);min-height:14px;margin-bottom:3px;text-align:center;}
-.b-ctrl .row{margin-bottom:3px;}
+.b-ctrl .tip{font-size:12px;color:var(--tx3);min-height:16px;margin-bottom:4px;text-align:center;transition:color .2s;}
+.b-ctrl .tip.zs-tip{
+  color:#d8b050;
+  font-weight:700;
+  text-shadow:0 0 6px rgba(220,180,80,0.6);
+}
+.b-ctrl .row{margin-bottom:4px;}
 .b-ctrl .row:last-child{margin-bottom:0;}
 .b-ctrl .btn{margin:0;padding:11px 4px;font-size:14px;}
 
@@ -253,9 +290,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   100%{opacity:0;transform:translate(-50%,-180%) scale(.9);}
 }
 
-/* ============================================================
- *  命中反馈
- * ============================================================ */
+/* 命中反馈 */
 @keyframes hitShake {
   0%, 100% { transform: translateX(0); }
   20% { transform: translateX(-4px); }
@@ -302,9 +337,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 }
 .anim-rage-hit { animation: rageHit 500ms ease-out; }
 
-/* ============================================================
- *  技能特效
- * ============================================================ */
+/* 技能 emoji */
 .skill-emoji{
   position:fixed;
   transform:translate(-50%,-50%);
@@ -315,6 +348,10 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   animation:skillEmoji 900ms ease-out forwards;
   filter:drop-shadow(0 0 6px rgba(255,255,255,0.75));
 }
+.skill-emoji.small{
+  font-size:20px;
+  filter:drop-shadow(0 0 4px rgba(255,180,80,0.85));
+}
 @keyframes skillEmoji{
   0%   { opacity:0; transform:translate(-50%,-50%) scale(0.4); }
   20%  { opacity:1; transform:translate(-50%,-110%) scale(1.45); }
@@ -322,26 +359,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
   100% { opacity:0; transform:translate(-50%,-220%) scale(0.9); }
 }
 
-.skill-sweep{
-  position:fixed;
-  top:0;
-  left:-120%;
-  width:60%;
-  height:100vh;
-  background:linear-gradient(to right, transparent, rgba(255,255,255,0.55), transparent);
-  pointer-events:none;
-  z-index:550;
-  animation:sweep 500ms ease-out forwards;
-}
-@keyframes sweep{
-  0%   { left:-120%; opacity:0; }
-  30%  { opacity:1; }
-  100% { left:120%;  opacity:0; }
-}
-
-/* ============================================================
- *  装备详情弹窗
- * ============================================================ */
+/* 装备详情弹窗 */
 .modal{
   position:fixed;inset:0;z-index:400;
   background:rgba(0,0,0,.75);
@@ -379,9 +397,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pos
 }
 .modal-box .modal-actions .btn{flex:1;min-width:70px;margin:0;padding:7px 4px;font-size:12px;}
 
-/* ============================================================
- *  Toast / Confirm
- * ============================================================ */
+/* Toast / Confirm */
 #toast{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:#222;color:#eee;border:1px solid #444;padding:7px 14px;border-radius:20px;font-size:12px;z-index:300;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center;}
 #toast.on{opacity:1;}
 #confirm{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:20px;}
